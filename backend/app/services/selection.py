@@ -90,25 +90,40 @@ def build_best_selection(players: list[Player], *, blocked_player_ids: set[int] 
         if player.injury_weeks_remaining == 0 and player.suspended_matches == 0 and player.id not in blocked_player_ids
     ]
     chosen_ids: set[int] = set()
-    starting_lineup = []
-    for slot in LINEUP_SLOTS:
-        eligible = [
-            player for player in available
-            if player.id not in chosen_ids and (player.primary_position == slot or slot in player.secondary_positions)
-        ]
+    starting_lineup_by_index: dict[int, SelectionSlotRead] = {}
+    remaining_slots = list(enumerate(LINEUP_SLOTS))
+    while remaining_slots:
+        slot_index, slot = min(
+            remaining_slots,
+            key=lambda item: (
+                len(
+                    [
+                        player
+                        for player in available
+                        if player.id not in chosen_ids and player_can_cover_slot(player, item[1])
+                    ]
+                ),
+                item[0],
+            ),
+        )
+        eligible = [player for player in available if player.id not in chosen_ids and player_can_cover_slot(player, slot)]
         if not eligible:
             eligible = [player for player in available if player.id not in chosen_ids]
         player = sorted(
             eligible,
             key=lambda candidate: (
                 candidate.primary_position != slot,
+                slot not in candidate.secondary_positions,
                 -candidate.overall_rating,
                 -candidate.fitness,
                 candidate.fatigue,
             ),
         )[0]
-        starting_lineup.append(SelectionSlotRead(slot=slot, player_id=player.id))
+        starting_lineup_by_index[slot_index] = SelectionSlotRead(slot=slot, player_id=player.id)
         chosen_ids.add(player.id)
+        remaining_slots = [entry for entry in remaining_slots if entry[0] != slot_index]
+
+    starting_lineup = [starting_lineup_by_index[index] for index in range(len(LINEUP_SLOTS))]
 
     remaining = [player for player in available if player.id not in chosen_ids]
     front_rows = sorted(

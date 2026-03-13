@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
@@ -30,6 +31,10 @@ from backend.app.schemas.api import (
     InboxMessageRead,
     InboxResponse,
     MatchResultRead,
+    NewSaveFeaturedPlayer,
+    NewSaveOnboarding,
+    NewSaveResponse,
+    NewSaveSquadSummary,
     OffseasonStatusResponse,
     SaveSummary,
     SeasonHistoryResponse,
@@ -253,15 +258,93 @@ def _current_season_filter(save: SaveGame):
     return save.season_number
 
 
+def _get_next_fixture(session: Session, save: SaveGame, team: Team) -> Fixture | None:
+    return session.exec(
+        select(Fixture)
+        .where(Fixture.save_game_id == save.id)
+        .where(Fixture.season_number == _current_season_filter(save))
+        .where(or_(Fixture.home_team_id == team.id, Fixture.away_team_id == team.id))
+        .where(Fixture.played.is_(False))
+        .order_by(Fixture.week, Fixture.id)
+    ).first()
+
+
+def _build_new_save_onboarding(session: Session, save: SaveGame) -> NewSaveOnboarding:
+    team = get_user_team(session, save)
+    players = session.exec(
+        select(Player).where(Player.team_id == team.id).order_by(Player.primary_position, Player.overall_rating.desc(), Player.age)
+    ).all()
+    selection = session.exec(select(TeamSelection).where(TeamSelection.team_id == team.id)).first()
+    featured_player_ids = [
+        ("Captain", selection.captain_id),
+        ("Primary Kicker", selection.goal_kicker_id),
+        ("Star Player", max(players, key=lambda candidate: candidate.overall_rating).id),
+        ("Top Prospect", max(players, key=lambda candidate: candidate.potential).id),
+    ]
+    highlights_by_player_id: dict[int, list[str]] = {}
+    for label, player_id in featured_player_ids:
+        highlights_by_player_id.setdefault(player_id, [])
+        if label not in highlights_by_player_id[player_id]:
+            highlights_by_player_id[player_id].append(label)
+
+    position_counts = Counter(player.primary_position for player in players)
+    next_fixture = _get_next_fixture(session, save, team)
+    player_lookup = {player.id: player for player in players}
+
+    return NewSaveOnboarding(
+        team=serialize_team(team),
+        squad_summary=NewSaveSquadSummary(
+            player_count=len(players),
+            average_age=round(sum(player.age for player in players) / len(players)),
+            average_overall=round(sum(player.overall_rating for player in players) / len(players)),
+            total_wages=sum(player.wage for player in players),
+            position_counts=dict(sorted(position_counts.items())),
+        ),
+        featured_players=[
+            NewSaveFeaturedPlayer(
+                id=player_lookup[player_id].id,
+                name=f"{player_lookup[player_id].first_name} {player_lookup[player_id].last_name}",
+                primary_position=player_lookup[player_id].primary_position,
+                overall_rating=player_lookup[player_id].overall_rating,
+                age=player_lookup[player_id].age,
+                highlight=" & ".join(labels),
+            )
+            for player_id, labels in highlights_by_player_id.items()
+        ],
+        players=[serialize_player(player) for player in players],
+        next_fixture=serialize_fixture(session, next_fixture) if next_fixture else None,
+    )
+
+
 def list_available_clubs() -> list[ClubOption]:
     return list_club_options()
 
 
-def create_new_save(session: Session, team_template_id: int, name: str) -> SaveSummary:
-    if team_template_id < 1 or team_template_id > len(list_club_options()):
+def create_new_save(
+    session: Session,
+    team_template_id: int,
+    name: str,
+    club_name: str,
+    club_short_name: str,
+) -> NewSaveResponse:
+    club_options = list_club_options()
+    if team_template_id < 1 or team_template_id > len(club_options):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid club choice.")
-    save = create_save_world(session, chosen_template_team_id=team_template_id, save_name=name)
-    return build_save_summary(session, save)
+    name_conflict = {option.name.lower() for option in club_options}
+    short_name_conflict = {option.short_name.lower() for option in club_options}
+    if club_name.lower() in name_conflict:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Club name must be unique in the league.")
+    if club_short_name.lower() in short_name_conflict:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Club short name must be unique in the league.")
+
+    save = create_save_world(
+        session,
+        chosen_template_team_id=team_template_id,
+        save_name=name,
+        club_name=club_name,
+        club_short_name=club_short_name,
+    )
+    return NewSaveResponse(save=build_save_summary(session, save), onboarding=_build_new_save_onboarding(session, save))
 
 
 def _phase_message(save: SaveGame) -> str | None:
@@ -290,14 +373,7 @@ def get_dashboard(session: Session) -> DashboardResponse:
     table = build_table(session, save)
     next_fixture = None
     if save.phase == "in_season":
-        next_fixture = session.exec(
-            select(Fixture)
-            .where(Fixture.save_game_id == save.id)
-            .where(Fixture.season_number == _current_season_filter(save))
-            .where(or_(Fixture.home_team_id == user_team.id, Fixture.away_team_id == user_team.id))
-            .where(Fixture.played.is_(False))
-            .order_by(Fixture.week, Fixture.id)
-        ).first()
+        next_fixture = _get_next_fixture(session, save, user_team)
     recent_fixtures = session.exec(
         select(Fixture)
         .where(Fixture.save_game_id == save.id)

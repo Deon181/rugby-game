@@ -9,7 +9,15 @@ from backend.tests.helpers import create_test_save, play_live_week
 
 
 def test_recruitment_endpoints_track_shortlist_and_reports(client):
-    client.post("/api/saves", json={"team_id": 1, "name": "Recruitment Save"})
+    client.post(
+        "/api/saves",
+        json={
+            "template_team_id": 1,
+            "club_name": "Iron Bay RFC",
+            "club_short_name": "IBR",
+            "name": "Recruitment Save",
+        },
+    )
 
     initial = client.get("/api/recruitment")
     assert initial.status_code == 200

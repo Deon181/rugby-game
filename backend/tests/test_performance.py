@@ -12,7 +12,15 @@ from backend.tests.helpers import create_test_save, play_out_regular_season
 
 
 def test_performance_endpoint_seeds_default_plan(client):
-    client.post("/api/saves", json={"team_id": 1, "name": "Performance Save"})
+    client.post(
+        "/api/saves",
+        json={
+            "template_team_id": 1,
+            "club_name": "Granite Coast RFC",
+            "club_short_name": "GCR",
+            "name": "Performance Save",
+        },
+    )
 
     overview = client.get("/api/performance")
     tactics = client.get("/api/tactics")

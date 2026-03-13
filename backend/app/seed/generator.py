@@ -129,7 +129,7 @@ def list_club_options() -> list[ClubOption]:
         reputation = club[2]
         options.append(
             ClubOption(
-                team_id=index,
+                template_team_id=index,
                 name=club[0],
                 short_name=club[1],
                 reputation=reputation,
@@ -276,7 +276,13 @@ def create_transfer_listings_for_season(
         )
 
 
-def create_save_world(session: Session, chosen_template_team_id: int, save_name: str) -> SaveGame:
+def create_save_world(
+    session: Session,
+    chosen_template_team_id: int,
+    save_name: str,
+    club_name: str,
+    club_short_name: str,
+) -> SaveGame:
     existing = session.exec(select(SaveGame).where(SaveGame.active.is_(True))).all()
     for save in existing:
         save.active = False
@@ -292,11 +298,12 @@ def create_save_world(session: Session, chosen_template_team_id: int, save_name:
 
     team_records: list[Team] = []
     for index, template in enumerate(_club_templates()):
+        is_user_team = index + 1 == chosen_template_team_id
         team = Team(
             save_game_id=save.id,
             league_id=league.id,
-            name=template.name,
-            short_name=template.short_name,
+            name=club_name if is_user_team else template.name,
+            short_name=club_short_name if is_user_team else template.short_name,
             reputation=template.reputation,
             budget=template.budget,
             wage_budget=template.wage_budget,
@@ -305,7 +312,7 @@ def create_save_world(session: Session, chosen_template_team_id: int, save_name:
             staff_defense=max(62, template.reputation + ((index + 2) % 5) - 2),
             staff_fitness=max(60, template.reputation - 3 + (index % 4)),
             staff_set_piece=max(60, template.reputation - 2 + ((index + 1) % 4)),
-            is_user_team=index + 1 == chosen_template_team_id,
+            is_user_team=is_user_team,
         )
         session.add(team)
         team_records.append(team)

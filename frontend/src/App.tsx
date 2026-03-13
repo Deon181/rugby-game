@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 import { AppShell } from "./layout/AppShell";
 import { LoadingPanel } from "./components/LoadingPanel";
@@ -12,6 +12,9 @@ const FixturesPage = lazy(() => import("./pages/FixturesPage").then((module) => 
 const InboxPage = lazy(() => import("./pages/InboxPage").then((module) => ({ default: module.InboxPage })));
 const MatchCentrePage = lazy(() => import("./pages/MatchCentrePage").then((module) => ({ default: module.MatchCentrePage })));
 const NewGamePage = lazy(() => import("./pages/NewGamePage").then((module) => ({ default: module.NewGamePage })));
+const NewTeamRevealPage = lazy(() =>
+  import("./pages/NewTeamRevealPage").then((module) => ({ default: module.NewTeamRevealPage })),
+);
 const OffseasonPage = lazy(() => import("./pages/OffseasonPage").then((module) => ({ default: module.OffseasonPage })));
 const PerformancePage = lazy(() => import("./pages/PerformancePage").then((module) => ({ default: module.PerformancePage })));
 const SquadPage = lazy(() => import("./pages/SquadPage").then((module) => ({ default: module.SquadPage })));
@@ -20,13 +23,20 @@ const TacticsPage = lazy(() => import("./pages/TacticsPage").then((module) => ({
 const TransfersPage = lazy(() => import("./pages/TransfersPage").then((module) => ({ default: module.TransfersPage })));
 
 function AppRoutes() {
-  const { bootstrapped, currentSave, bootstrap, bootstrapError } = useGameStore();
+  const location = useLocation();
+  const { bootstrapped, currentSave, bootstrap, bootstrapError, pendingOnboarding, clearPendingOnboarding } = useGameStore();
 
   useEffect(() => {
     if (!bootstrapped) {
       void bootstrap();
     }
   }, [bootstrapped, bootstrap]);
+
+  useEffect(() => {
+    if (currentSave && pendingOnboarding && location.pathname !== "/new-game/reveal" && location.pathname !== "/new-game") {
+      clearPendingOnboarding();
+    }
+  }, [clearPendingOnboarding, currentSave, location.pathname, pendingOnboarding]);
 
   if (!bootstrapped) {
     return <LoadingPanel label="Loading Rugby Director" className="min-h-screen" />;
@@ -37,6 +47,7 @@ function AppRoutes() {
       <Suspense fallback={<LoadingPanel label="Loading Rugby Director" className="min-h-screen" />}>
         <Routes>
           <Route path="/new-game" element={<NewGamePage />} />
+          <Route path="/new-game/reveal" element={<Navigate to="/new-game" replace />} />
           <Route path="*" element={<Navigate to="/new-game" replace />} />
         </Routes>
       </Suspense>
@@ -48,6 +59,7 @@ function AppRoutes() {
       <Suspense fallback={<LoadingPanel label="Loading page" className="min-h-[60vh]" />}>
         <Routes>
           <Route path="/" element={currentSave.phase === "in_season" ? <DashboardPage /> : <Navigate to="/offseason" replace />} />
+          <Route path="/new-game/reveal" element={<NewTeamRevealPage />} />
           <Route path="/offseason" element={<OffseasonPage />} />
           <Route path="/squad" element={<SquadPage />} />
           <Route path="/performance" element={<PerformancePage />} />
@@ -60,7 +72,7 @@ function AppRoutes() {
           <Route path="/match-centre" element={<MatchCentrePage />} />
           <Route path="/match-centre/:fixtureId" element={<MatchCentrePage />} />
           <Route path="/inbox" element={<InboxPage />} />
-          <Route path="/new-game" element={<Navigate to="/" replace />} />
+          <Route path="/new-game" element={<Navigate to={pendingOnboarding ? "/new-game/reveal" : "/"} replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

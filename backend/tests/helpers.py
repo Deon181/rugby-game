@@ -10,7 +10,13 @@ from backend.app.simulation.engine import TeamProfile, build_team_profile
 
 
 def create_test_save(session: Session, club_id: int = 1):
-    return create_save_world(session, chosen_template_team_id=club_id, save_name="Test Save")
+    return create_save_world(
+        session,
+        chosen_template_team_id=club_id,
+        save_name="Test Save",
+        club_name=f"Test Club {club_id}",
+        club_short_name=f"TC{club_id}",
+    )
 
 
 def team_bundle(session: Session, team_id: int) -> tuple[Team, list[Player], TeamSelection, TeamTactics]:

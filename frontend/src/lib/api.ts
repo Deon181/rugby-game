@@ -8,6 +8,7 @@ import type {
   LiveMatchHalftimePayload,
   LiveMatchSnapshot,
   MatchResult,
+  NewSaveResponse,
   OffseasonStatusResponse,
   PerformanceOverview,
   RecruitmentResponse,
@@ -43,8 +44,8 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 export const api = {
   currentSave: () => request<SaveSummary | null>("/api/save/current"),
   saveOptions: () => request<ClubOption[]>("/api/saves/options"),
-  createSave: (payload: { team_id: number; name: string }) =>
-    request<{ save: SaveSummary }>("/api/saves", { method: "POST", body: JSON.stringify(payload) }),
+  createSave: (payload: { template_team_id: number; club_name: string; club_short_name: string; name: string }) =>
+    request<NewSaveResponse>("/api/saves", { method: "POST", body: JSON.stringify(payload) }),
   careerStatus: () => request<SaveSummary>("/api/career/status"),
   dashboard: () => request<Dashboard>("/api/dashboard"),
   finance: () => request<FinanceOverview>("/api/finance"),

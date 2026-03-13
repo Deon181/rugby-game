@@ -11,7 +11,15 @@ from backend.tests.helpers import create_test_save, play_live_week, play_out_reg
 
 
 def test_finance_endpoint_initializes_board_state(client):
-    client.post("/api/saves", json={"team_id": 1, "name": "Finance Save"})
+    client.post(
+        "/api/saves",
+        json={
+            "template_team_id": 1,
+            "club_name": "Summit Bridge RFC",
+            "club_short_name": "SBR",
+            "name": "Finance Save",
+        },
+    )
 
     response = client.get("/api/finance")
 

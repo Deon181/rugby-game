@@ -86,7 +86,13 @@ def current_save(session: Session = Depends(get_session)) -> SaveSummary | None:
 
 @api_router.post("/saves", response_model=NewSaveResponse)
 def new_save(request: NewSaveRequest, session: Session = Depends(get_session)) -> NewSaveResponse:
-    return NewSaveResponse(save=create_new_save(session, request.team_id, request.name))
+    return create_new_save(
+        session,
+        request.template_team_id,
+        request.name,
+        request.club_name,
+        request.club_short_name,
+    )
 
 
 @api_router.get("/career/status", response_model=SaveSummary)

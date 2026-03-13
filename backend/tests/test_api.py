@@ -1,21 +1,37 @@
+def new_save_payload(template_team_id: int = 1, club_name: str = "Harbour City RFC", club_short_name: str = "HCR"):
+    return {
+        "template_team_id": template_team_id,
+        "club_name": club_name,
+        "club_short_name": club_short_name,
+        "name": "API Save",
+    }
+
+
 def test_create_save_and_fetch_dashboard(client):
     current = client.get("/api/save/current")
     assert current.status_code == 200
     assert current.json() is None
 
-    create = client.post("/api/saves", json={"team_id": 1, "name": "API Save"})
+    create = client.post("/api/saves", json=new_save_payload())
     assert create.status_code == 200
     payload = create.json()
     assert payload["save"]["current_week"] == 1
     assert payload["save"]["phase"] == "in_season"
+    assert payload["save"]["user_team_name"] == "Harbour City RFC"
+    assert payload["onboarding"]["team"]["name"] == "Harbour City RFC"
+    assert payload["onboarding"]["team"]["short_name"] == "HCR"
+    assert payload["onboarding"]["squad_summary"]["player_count"] == 30
+    assert len(payload["onboarding"]["players"]) == 30
+    assert payload["onboarding"]["featured_players"]
+    assert payload["onboarding"]["next_fixture"] is not None
 
     dashboard = client.get("/api/dashboard")
     assert dashboard.status_code == 200
-    assert dashboard.json()["team"]["name"]
+    assert dashboard.json()["team"]["name"] == "Harbour City RFC"
 
 
 def test_update_tactics_and_advance_week(client):
-    client.post("/api/saves", json={"team_id": 1, "name": "API Save"})
+    client.post("/api/saves", json=new_save_payload())
     tactics = client.get("/api/tactics")
     payload = tactics.json()
     payload["attacking_style"] = "expansive"
@@ -57,7 +73,15 @@ def test_update_tactics_and_advance_week(client):
 
 
 def test_offseason_endpoints_roll_into_new_season(client):
-    client.post("/api/saves", json={"team_id": 1, "name": "Career Save"})
+    client.post(
+        "/api/saves",
+        json={
+            "template_team_id": 1,
+            "club_name": "Cape Meridian RFC",
+            "club_short_name": "CMR",
+            "name": "Career Save",
+        },
+    )
     for _ in range(18):
         current = client.post("/api/live-match/start")
         assert current.status_code == 200
@@ -105,3 +129,18 @@ def test_offseason_endpoints_roll_into_new_season(client):
     assert step_4.status_code == 200
     assert step_4.json()["phase"] == "in_season"
     assert step_4.json()["season_number"] == 2
+
+
+def test_create_save_rejects_duplicate_club_identity(client):
+    response = client.post(
+        "/api/saves",
+        json={
+            "template_team_id": 1,
+            "club_name": "Kingsport Admirals",
+            "club_short_name": "NEW",
+            "name": "Duplicate Save",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Club name must be unique in the league."

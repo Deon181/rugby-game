@@ -3,11 +3,18 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+
+def _normalize_name(value: str) -> str:
+    cleaned = " ".join(value.strip().split())
+    if not cleaned:
+        raise ValueError("Value cannot be blank.")
+    return cleaned
 
 
 class ClubOption(BaseModel):
-    team_id: int
+    template_team_id: int
     name: str
     short_name: str
     reputation: int
@@ -28,15 +35,6 @@ class SaveSummary(BaseModel):
     offseason_step: str
     user_team_id: int
     user_team_name: str
-
-
-class NewSaveRequest(BaseModel):
-    team_id: int
-    name: str = "Career Save"
-
-
-class NewSaveResponse(BaseModel):
-    save: SaveSummary
 
 
 class TeamOverviewRead(BaseModel):
@@ -71,6 +69,48 @@ class SquadPlayerRead(BaseModel):
     attributes: dict[str, int]
     derived_ratings: dict[str, int]
     is_free_agent: bool = False
+
+
+class NewSaveSquadSummary(BaseModel):
+    player_count: int
+    average_age: int
+    average_overall: int
+    total_wages: int
+    position_counts: dict[str, int]
+
+
+class NewSaveFeaturedPlayer(BaseModel):
+    id: int
+    name: str
+    primary_position: str
+    overall_rating: int
+    age: int
+    highlight: str
+
+
+class NewSaveOnboarding(BaseModel):
+    team: TeamOverviewRead
+    squad_summary: NewSaveSquadSummary
+    featured_players: list[NewSaveFeaturedPlayer]
+    players: list[SquadPlayerRead]
+    next_fixture: "FixtureDetail | None" = None
+
+
+class NewSaveRequest(BaseModel):
+    template_team_id: int
+    club_name: str = Field(min_length=2, max_length=40)
+    club_short_name: str = Field(min_length=2, max_length=18)
+    name: str = Field(default="Career Save", min_length=1, max_length=40)
+
+    @field_validator("club_name", "club_short_name", "name")
+    @classmethod
+    def normalize_names(cls, value: str) -> str:
+        return _normalize_name(value)
+
+
+class NewSaveResponse(BaseModel):
+    save: SaveSummary
+    onboarding: NewSaveOnboarding
 
 
 class SquadResponse(BaseModel):

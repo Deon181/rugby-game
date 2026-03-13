@@ -70,19 +70,19 @@ SECONDARY_POSITION_MAP = {
 }
 
 ROSTER_TEMPLATE = {
-    "Loosehead Prop": 3,
+    "Loosehead Prop": 2,
     "Hooker": 3,
     "Tighthead Prop": 3,
-    "Lock": 5,
+    "Lock": 4,
     "Blindside Flanker": 2,
     "Openside Flanker": 2,
     "Number 8": 2,
-    "Scrumhalf": 3,
+    "Scrumhalf": 2,
     "Flyhalf": 2,
     "Inside Centre": 2,
     "Outside Centre": 2,
-    "Wing": 3,
-    "Fullback": 1,
+    "Wing": 2,
+    "Fullback": 2,
 }
 
 ATTRIBUTE_NAMES = [

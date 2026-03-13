@@ -1,5 +1,5 @@
 export type ClubOption = {
-  team_id: number;
+  template_team_id: number;
   name: string;
   short_name: string;
   reputation: number;
@@ -61,6 +61,36 @@ export type SquadResponse = {
   players: SquadPlayer[];
   total_wages: number;
   injured_count: number;
+};
+
+export type NewSaveSquadSummary = {
+  player_count: number;
+  average_age: number;
+  average_overall: number;
+  total_wages: number;
+  position_counts: Record<string, number>;
+};
+
+export type NewSaveFeaturedPlayer = {
+  id: number;
+  name: string;
+  primary_position: string;
+  overall_rating: number;
+  age: number;
+  highlight: string;
+};
+
+export type NewSaveOnboarding = {
+  team: TeamOverview;
+  squad_summary: NewSaveSquadSummary;
+  featured_players: NewSaveFeaturedPlayer[];
+  players: SquadPlayer[];
+  next_fixture: Fixture | null;
+};
+
+export type NewSaveResponse = {
+  save: SaveSummary;
+  onboarding: NewSaveOnboarding;
 };
 
 export type Tactics = {
