@@ -1,0 +1,82 @@
+import type {
+  AdvanceWeekResponse,
+  ClubOption,
+  Dashboard,
+  FixtureList,
+  InboxResponse,
+  LiveMatchHalftimePayload,
+  LiveMatchSnapshot,
+  MatchResult,
+  OffseasonStatusResponse,
+  SaveSummary,
+  SeasonHistoryResponse,
+  SeasonReviewResponse,
+  Selection,
+  SquadResponse,
+  TableResponse,
+  Tactics,
+  TeamOverview,
+  TransferListResponse,
+  YouthIntakeResponse,
+} from "./types";
+
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const response = await fetch(path, {
+    headers: {
+      "Content-Type": "application/json",
+    },
+    ...options,
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({ detail: "Request failed" }));
+    throw new Error(payload.detail ?? "Request failed");
+  }
+  if (response.status === 204) {
+    return undefined as T;
+  }
+  return response.json() as Promise<T>;
+}
+
+export const api = {
+  currentSave: () => request<SaveSummary | null>("/api/save/current"),
+  saveOptions: () => request<ClubOption[]>("/api/saves/options"),
+  createSave: (payload: { team_id: number; name: string }) =>
+    request<{ save: SaveSummary }>("/api/saves", { method: "POST", body: JSON.stringify(payload) }),
+  careerStatus: () => request<SaveSummary>("/api/career/status"),
+  dashboard: () => request<Dashboard>("/api/dashboard"),
+  club: () => request<TeamOverview>("/api/club"),
+  squad: () => request<SquadResponse>("/api/squad"),
+  tactics: () => request<Tactics>("/api/tactics"),
+  updateTactics: (payload: Tactics) => request<Tactics>("/api/tactics", { method: "PUT", body: JSON.stringify(payload) }),
+  selection: () => request<Selection>("/api/selection"),
+  updateSelection: (payload: Selection) =>
+    request<Selection>("/api/selection", { method: "PUT", body: JSON.stringify(payload) }),
+  fixtures: () => request<FixtureList>("/api/fixtures"),
+  table: () => request<TableResponse>("/api/table"),
+  transfers: () => request<TransferListResponse>("/api/transfers"),
+  bidTransfer: (listingId: number, amount: number) =>
+    request<{ status: string; message: string }>(`/api/transfers/${listingId}/bid`, {
+      method: "POST",
+      body: JSON.stringify({ amount }),
+    }),
+  renewContract: (playerId: number, years: number, weeklyWage: number) =>
+    request<{ status: string; message: string }>(`/api/contracts/${playerId}/renew`, {
+      method: "POST",
+      body: JSON.stringify({ years, weekly_wage: weeklyWage }),
+    }),
+  inbox: () => request<InboxResponse>("/api/inbox"),
+  advanceWeek: () => request<AdvanceWeekResponse>("/api/advance-week", { method: "POST" }),
+  currentLiveMatch: () => request<LiveMatchSnapshot | null>("/api/live-match/current"),
+  startLiveMatch: () => request<LiveMatchSnapshot>("/api/live-match/start", { method: "POST" }),
+  tickLiveMatch: () => request<LiveMatchSnapshot>("/api/live-match/tick", { method: "POST" }),
+  submitHalftime: (payload: LiveMatchHalftimePayload) =>
+    request<LiveMatchSnapshot>("/api/live-match/halftime", { method: "POST", body: JSON.stringify(payload) }),
+  seasonReview: () => request<SeasonReviewResponse>("/api/season/review"),
+  offseasonStatus: () => request<OffseasonStatusResponse>("/api/offseason/status"),
+  advanceOffseason: () => request<SaveSummary>("/api/offseason/advance", { method: "POST" }),
+  youthIntake: () => request<YouthIntakeResponse>("/api/youth-intake"),
+  promoteYouth: (prospectId: number) =>
+    request<{ status: string; message: string }>(`/api/youth-intake/${prospectId}/promote`, { method: "POST" }),
+  seasonHistory: () => request<SeasonHistoryResponse>("/api/history/seasons"),
+  match: (fixtureId: number) => request<MatchResult>(`/api/matches/${fixtureId}`),
+};
