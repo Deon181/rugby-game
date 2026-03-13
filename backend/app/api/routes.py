@@ -15,6 +15,7 @@ from backend.app.schemas.api import (
     NewSaveRequest,
     NewSaveResponse,
     OffseasonStatusResponse,
+    RecruitmentResponse,
     SaveSummary,
     SeasonHistoryResponse,
     SeasonReviewResponse,
@@ -52,6 +53,7 @@ from backend.app.services.game import (
     update_selection,
     update_tactics,
 )
+from backend.app.services.recruitment import get_recruitment_board, start_scouting_target, toggle_shortlist_target
 from backend.app.services.live_match import get_current_live_match, start_live_match, submit_halftime_changes, tick_live_match
 from backend.app.services.progression import advance_week
 from backend.app.services.transfers import make_transfer_bid, renew_contract
@@ -188,6 +190,21 @@ def table(session: Session = Depends(get_session)) -> TableResponse:
 @api_router.get("/transfers", response_model=TransferListResponse)
 def transfers(session: Session = Depends(get_session)) -> TransferListResponse:
     return get_transfer_listings(session)
+
+
+@api_router.get("/recruitment", response_model=RecruitmentResponse)
+def recruitment(session: Session = Depends(get_session)) -> RecruitmentResponse:
+    return get_recruitment_board(session)
+
+
+@api_router.post("/recruitment/scouting/{player_id}")
+def recruitment_scout(player_id: int, session: Session = Depends(get_session)) -> dict[str, str]:
+    return start_scouting_target(session, player_id)
+
+
+@api_router.post("/recruitment/shortlist/{player_id}")
+def recruitment_shortlist(player_id: int, session: Session = Depends(get_session)) -> dict[str, str]:
+    return toggle_shortlist_target(session, player_id)
 
 
 @api_router.post("/transfers/{listing_id}/bid")

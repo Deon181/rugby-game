@@ -190,6 +190,19 @@ class TransferListing(SQLModel, table=True):
     is_active: bool = Field(default=True)
 
 
+class RecruitmentTarget(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    save_game_id: int = Field(foreign_key="savegame.id", index=True)
+    season_number: int = Field(default=1, index=True)
+    player_id: int = Field(foreign_key="player.id", index=True)
+    listing_id: int | None = Field(default=None, foreign_key="transferlisting.id", index=True)
+    weeks_scouted: int = Field(default=0)
+    shortlisted: bool = Field(default=False)
+    status: str = Field(default="active", index=True)
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
 class InboxMessage(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     save_game_id: int = Field(foreign_key="savegame.id", index=True)

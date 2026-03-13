@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from sqlmodel import Session, select
 
 from backend.app.models.entities import InboxMessage, Player, Team, TeamSelection, TransferListing
+from backend.app.services.recruitment import close_recruitment_target, get_contract_watch_player
 from backend.app.services.game import get_active_save, get_user_team
 from backend.app.services.selection import build_best_selection
 
@@ -59,6 +60,7 @@ def make_transfer_bid(session: Session, listing_id: int, amount: int) -> dict[st
 
     previous_club = seller.name if seller else "the free-agent market"
     body = f"{player.first_name} {player.last_name} joins from {previous_club} for {amount:,}."
+    close_recruitment_target(session, save, player.id, status="signed")
     session.add(
         InboxMessage(
             save_game_id=save.id,
@@ -86,17 +88,27 @@ def renew_contract(session: Session, player_id: int, years: int, weekly_wage: in
     player = session.exec(select(Player).where(Player.id == player_id).where(Player.team_id == user_team.id)).first()
     if not player:
         raise HTTPException(status_code=404, detail="Player not found at your club.")
+
+    contract_watch = get_contract_watch_player(session, player_id, save)
     squad = session.exec(select(Player).where(Player.team_id == user_team.id)).all()
     current_wages = sum(candidate.wage for candidate in squad) - player.wage
     if current_wages + weekly_wage > user_team.wage_budget:
         raise HTTPException(status_code=400, detail="Renewal exceeds wage budget.")
-    if weekly_wage < int(player.wage * 0.95):
-        raise HTTPException(status_code=400, detail="Offer is below the player's current expectations.")
+    if weekly_wage < contract_watch.desired_weekly_wage:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Offer is below expectations. {player.first_name} wants at least {contract_watch.desired_weekly_wage:,} per week.",
+        )
+    if years < contract_watch.minimum_years:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{player.first_name} is looking for at least a {contract_watch.minimum_years}-year commitment.",
+        )
 
     player.wage = weekly_wage
     player.contract_years_remaining = years
     player.contract_last_renewed_season = save.season_number
-    player.morale = min(95, player.morale + 6)
+    player.morale = min(97, player.morale + (8 if weekly_wage >= contract_watch.recommended_max_wage else 6))
     session.add(player)
     session.add(
         InboxMessage(

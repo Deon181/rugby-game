@@ -16,6 +16,7 @@ from backend.app.services.game import (
     get_user_team,
     serialize_inbox_message,
 )
+from backend.app.services.recruitment import progress_scouting_targets
 from backend.app.services.selection import SelectionValidationError, build_best_selection, validate_selection
 from backend.app.simulation.engine import SimulationResult, build_team_profile, simulate_match
 
@@ -296,6 +297,7 @@ def finalize_current_week(
     if save.current_week in {6, 12, 17}:
         _create_contract_warnings(session, save, user_team, user_players)
 
+    progress_scouting_targets(session, save)
     save.current_week += 1
     save.updated_at = datetime.now(timezone.utc)
     session.add(save)

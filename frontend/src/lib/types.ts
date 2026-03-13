@@ -237,6 +237,71 @@ export type TransferListResponse = {
   wage_budget: number;
 };
 
+export type ScoutingReport = {
+  stage: string;
+  weeks_scouted: number;
+  weeks_to_complete: number;
+  fit_score: number | null;
+  fit_label: string | null;
+  risk_label: string | null;
+  estimated_value_low: number | null;
+  estimated_value_high: number | null;
+  estimated_weekly_wage_low: number | null;
+  estimated_weekly_wage_high: number | null;
+  potential_low: number | null;
+  potential_high: number | null;
+  contract_years_hint: string | null;
+  recommendation: string | null;
+};
+
+export type RecruitmentListing = {
+  listing_id: number;
+  player_id: number;
+  player_name: string;
+  current_team: string;
+  is_free_agent: boolean;
+  primary_position: string;
+  overall_rating: number;
+  age: number;
+  asking_price: number;
+  shortlisted: boolean;
+  scouting: ScoutingReport;
+};
+
+export type ContractWatchPlayer = {
+  player_id: number;
+  player_name: string;
+  primary_position: string;
+  overall_rating: number;
+  age: number;
+  contract_years_remaining: number;
+  current_wage: number;
+  desired_years: number;
+  minimum_years: number;
+  desired_weekly_wage: number;
+  recommended_max_wage: number;
+  retention_priority: string;
+  willingness: string;
+  morale: number;
+};
+
+export type RecruitmentSummary = {
+  active_reports: number;
+  completed_reports: number;
+  shortlisted_targets: number;
+  max_active_reports: number;
+};
+
+export type RecruitmentResponse = {
+  market: RecruitmentListing[];
+  shortlist: RecruitmentListing[];
+  contract_watch: ContractWatchPlayer[];
+  summary: RecruitmentSummary;
+  budget: number;
+  wage_budget: number;
+  current_wages: number;
+};
+
 export type InboxMessage = {
   id: number;
   type: string;

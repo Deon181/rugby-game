@@ -8,6 +8,7 @@ import type {
   LiveMatchSnapshot,
   MatchResult,
   OffseasonStatusResponse,
+  RecruitmentResponse,
   SaveSummary,
   SeasonHistoryResponse,
   SeasonReviewResponse,
@@ -54,6 +55,11 @@ export const api = {
   fixtures: () => request<FixtureList>("/api/fixtures"),
   table: () => request<TableResponse>("/api/table"),
   transfers: () => request<TransferListResponse>("/api/transfers"),
+  recruitment: () => request<RecruitmentResponse>("/api/recruitment"),
+  startScouting: (playerId: number) =>
+    request<{ status: string; message: string }>(`/api/recruitment/scouting/${playerId}`, { method: "POST" }),
+  toggleShortlist: (playerId: number) =>
+    request<{ status: string; message: string }>(`/api/recruitment/shortlist/${playerId}`, { method: "POST" }),
   bidTransfer: (listingId: number, amount: number) =>
     request<{ status: string; message: string }>(`/api/transfers/${listingId}/bid`, {
       method: "POST",

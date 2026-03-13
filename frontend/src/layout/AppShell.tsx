@@ -9,7 +9,7 @@ const baseNavItems = [
   { to: "/tactics", label: "Tactics" },
   { to: "/fixtures", label: "Fixtures" },
   { to: "/table", label: "League Table" },
-  { to: "/transfers", label: "Transfers" },
+  { to: "/transfers", label: "Recruitment" },
   { to: "/club", label: "Club Overview" },
   { to: "/match-centre", label: "Match Centre" },
   { to: "/inbox", label: "Inbox" },

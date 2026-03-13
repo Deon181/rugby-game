@@ -277,6 +277,71 @@ class TransferListResponse(BaseModel):
     wage_budget: int
 
 
+class ScoutingReportRead(BaseModel):
+    stage: str
+    weeks_scouted: int
+    weeks_to_complete: int
+    fit_score: int | None = None
+    fit_label: str | None = None
+    risk_label: str | None = None
+    estimated_value_low: int | None = None
+    estimated_value_high: int | None = None
+    estimated_weekly_wage_low: int | None = None
+    estimated_weekly_wage_high: int | None = None
+    potential_low: int | None = None
+    potential_high: int | None = None
+    contract_years_hint: str | None = None
+    recommendation: str | None = None
+
+
+class RecruitmentListingRead(BaseModel):
+    listing_id: int
+    player_id: int
+    player_name: str
+    current_team: str
+    is_free_agent: bool
+    primary_position: str
+    overall_rating: int
+    age: int
+    asking_price: int
+    shortlisted: bool = False
+    scouting: ScoutingReportRead
+
+
+class ContractWatchPlayerRead(BaseModel):
+    player_id: int
+    player_name: str
+    primary_position: str
+    overall_rating: int
+    age: int
+    contract_years_remaining: int
+    current_wage: int
+    desired_years: int
+    minimum_years: int
+    desired_weekly_wage: int
+    recommended_max_wage: int
+    retention_priority: str
+    willingness: str
+    morale: int
+
+
+class RecruitmentSummaryRead(BaseModel):
+    active_reports: int
+    completed_reports: int
+    shortlisted_targets: int
+    max_active_reports: int
+
+
+class RecruitmentResponse(BaseModel):
+    market: list[RecruitmentListingRead]
+    shortlist: list[RecruitmentListingRead]
+    contract_watch: list[ContractWatchPlayerRead]
+    summary: RecruitmentSummaryRead
+    budget: int
+    wage_budget: int
+    current_wages: int
+
+
 class TransferBidRequest(BaseModel):
     amount: int
 
