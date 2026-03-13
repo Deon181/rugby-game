@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { LoadingPanel } from "../components/LoadingPanel";
 import { PageHeader } from "../components/PageHeader";
@@ -13,10 +14,10 @@ const fields: Array<{ key: keyof Tactics; label: string; options: string[] }> = 
   { key: "ruck_commitment", label: "Ruck Commitment", options: ["low", "balanced", "high"] },
   { key: "set_piece_intent", label: "Set Piece Intent", options: ["safe", "balanced", "aggressive"] },
   { key: "goal_choice", label: "Goal Choice", options: ["go for posts", "balanced", "kick to corner"] },
-  { key: "training_focus", label: "Training Focus", options: ["fitness", "attack", "defense", "set_piece", "recovery"] },
 ];
 
 export function TacticsPage() {
+  const navigate = useNavigate();
   const [tactics, setTactics] = useState<Tactics | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -58,6 +59,19 @@ export function TacticsPage() {
         }
       />
       {message ? <div className="rounded-2xl bg-accentSoft px-4 py-3 text-sm">{message}</div> : null}
+      <SectionCard
+        title="Weekly Performance Link"
+        subtitle="Training focus still exists for compatibility, but it is now controlled from the performance hub."
+        actions={
+          <button className="btn-secondary" onClick={() => navigate("/performance")}>
+            Open Performance Hub
+          </button>
+        }
+      >
+        <div className="rounded-2xl bg-slate-950/30 p-4 text-sm text-muted">
+          Current mirrored focus: <span className="text-text">{tactics.training_focus}</span>
+        </div>
+      </SectionCard>
       <SectionCard title="Tactical Settings" subtitle="Every selection has a material effect on the simulation.">
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {fields.map((field) => (

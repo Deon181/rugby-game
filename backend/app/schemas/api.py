@@ -342,6 +342,103 @@ class RecruitmentResponse(BaseModel):
     current_wages: int
 
 
+class BoardStatusRead(BaseModel):
+    objective: str
+    confidence: int
+    pressure_state: str
+    operating_focus: str
+    drivers: list[str]
+
+
+class FinanceSummaryRead(BaseModel):
+    transfer_budget: int
+    wage_budget: int
+    current_wages: int
+    remaining_wage_budget: int
+    weekly_sponsor_income: int
+    weekly_operating_cost: int
+    average_home_gate: int
+    projected_balance_4_weeks: int
+
+
+class FinanceTransactionRead(BaseModel):
+    id: int
+    week: int
+    category: str
+    amount: int
+    balance_after: int
+    note: str
+    created_at: datetime
+
+
+class FinanceWeekBreakdownRead(BaseModel):
+    week: int
+    income: int
+    expenses: int
+    net: int
+
+
+class FinanceOverviewResponse(BaseModel):
+    save: SaveSummary
+    board: BoardStatusRead
+    summary: FinanceSummaryRead
+    recent_transactions: list[FinanceTransactionRead]
+    weekly_breakdown: list[FinanceWeekBreakdownRead]
+
+
+class FinanceSettingsUpdateRequest(BaseModel):
+    operating_focus: str
+
+
+class PerformancePlanRead(BaseModel):
+    focus: str
+    intensity: str
+    contact_level: str
+
+
+class PerformancePlanUpdateRequest(BaseModel):
+    focus: str
+    intensity: str
+    contact_level: str
+
+
+class MedicalAssignmentUpdateRequest(BaseModel):
+    rehab_mode: str | None = None
+    clearance_status: str | None = None
+
+
+class StaffEffectSummaryRead(BaseModel):
+    fitness_staff_rating: int
+    recovery_bonus: int
+    injury_risk_multiplier: float
+    rehab_bonus: int
+
+
+class MedicalBoardPlayerRead(BaseModel):
+    player_id: int
+    player_name: str
+    primary_position: str
+    overall_rating: int
+    fitness: int
+    fatigue: int
+    morale: int
+    injury_status: str
+    injury_weeks_remaining: int
+    rehab_mode: str
+    clearance_status: str
+    return_watch_weeks: int
+    group: str
+    note: str
+
+
+class PerformanceOverviewResponse(BaseModel):
+    save: SaveSummary
+    plan: PerformancePlanRead
+    fatigue_watch: list[MedicalBoardPlayerRead]
+    medical_board: list[MedicalBoardPlayerRead]
+    staff_effects: StaffEffectSummaryRead
+
+
 class TransferBidRequest(BaseModel):
     amount: int
 

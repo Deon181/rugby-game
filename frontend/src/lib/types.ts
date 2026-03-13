@@ -302,6 +302,88 @@ export type RecruitmentResponse = {
   current_wages: number;
 };
 
+export type BoardStatus = {
+  objective: string;
+  confidence: number;
+  pressure_state: string;
+  operating_focus: string;
+  drivers: string[];
+};
+
+export type FinanceSummary = {
+  transfer_budget: number;
+  wage_budget: number;
+  current_wages: number;
+  remaining_wage_budget: number;
+  weekly_sponsor_income: number;
+  weekly_operating_cost: number;
+  average_home_gate: number;
+  projected_balance_4_weeks: number;
+};
+
+export type FinanceTransaction = {
+  id: number;
+  week: number;
+  category: string;
+  amount: number;
+  balance_after: number;
+  note: string;
+  created_at: string;
+};
+
+export type FinanceWeekBreakdown = {
+  week: number;
+  income: number;
+  expenses: number;
+  net: number;
+};
+
+export type FinanceOverview = {
+  save: SaveSummary;
+  board: BoardStatus;
+  summary: FinanceSummary;
+  recent_transactions: FinanceTransaction[];
+  weekly_breakdown: FinanceWeekBreakdown[];
+};
+
+export type PerformancePlan = {
+  focus: string;
+  intensity: string;
+  contact_level: string;
+};
+
+export type MedicalBoardPlayer = {
+  player_id: number;
+  player_name: string;
+  primary_position: string;
+  overall_rating: number;
+  fitness: number;
+  fatigue: number;
+  morale: number;
+  injury_status: string;
+  injury_weeks_remaining: number;
+  rehab_mode: string;
+  clearance_status: string;
+  return_watch_weeks: number;
+  group: string;
+  note: string;
+};
+
+export type StaffEffectSummary = {
+  fitness_staff_rating: number;
+  recovery_bonus: number;
+  injury_risk_multiplier: number;
+  rehab_bonus: number;
+};
+
+export type PerformanceOverview = {
+  save: SaveSummary;
+  plan: PerformancePlan;
+  fatigue_watch: MedicalBoardPlayer[];
+  medical_board: MedicalBoardPlayer[];
+  staff_effects: StaffEffectSummary;
+};
+
 export type InboxMessage = {
   id: number;
   type: string;

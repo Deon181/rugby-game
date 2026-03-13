@@ -17,6 +17,7 @@ from backend.app.schemas.api import (
     SelectionSlotRead,
     TacticsRead,
 )
+from backend.app.services.performance import ensure_weekly_performance_plan, medical_assignment_map
 from backend.app.services.game import (
     build_save_summary,
     get_active_save,
@@ -403,6 +404,10 @@ def start_live_match(session: Session) -> LiveMatchSnapshotRead:
     fixture = _session_fixture(session, save, user_team)
     apply_between_week_recovery(session, save)
     context = load_week_context(session, save)
+    home_plan = ensure_weekly_performance_plan(session, save, context.teams_by_id[fixture.home_team_id]) if fixture.home_team_id == user_team.id else None
+    away_plan = ensure_weekly_performance_plan(session, save, context.teams_by_id[fixture.away_team_id]) if fixture.away_team_id == user_team.id else None
+    home_medical = medical_assignment_map(session, save, context.teams_by_id[fixture.home_team_id]) if fixture.home_team_id == user_team.id else {}
+    away_medical = medical_assignment_map(session, save, context.teams_by_id[fixture.away_team_id]) if fixture.away_team_id == user_team.id else {}
 
     live_session = LiveMatchSession(
         save_game_id=save.id,
@@ -428,12 +433,16 @@ def start_live_match(session: Session) -> LiveMatchSnapshotRead:
             context.players_by_team[fixture.home_team_id],
             context.selections_by_team[fixture.home_team_id],
             context.tactics_by_team[fixture.home_team_id],
+            performance_plan=home_plan,
+            medical_assignments=home_medical,
         ))),
         away_state=serialize_team_state(initialize_team_state(build_team_profile(
             context.teams_by_id[fixture.away_team_id],
             context.players_by_team[fixture.away_team_id],
             context.selections_by_team[fixture.away_team_id],
             context.tactics_by_team[fixture.away_team_id],
+            performance_plan=away_plan,
+            medical_assignments=away_medical,
         ))),
     )
     session.add(live_session)
@@ -459,8 +468,26 @@ def tick_live_match(session: Session) -> LiveMatchSnapshotRead:
         raise HTTPException(status_code=400, detail="The live match is not in a playable state.")
 
     teams_by_id, players_by_side, selections, tactics = _load_session_profiles(session, save, live_session)
-    home_profile = build_team_profile(teams_by_id[live_session.home_team_id], players_by_side["home"], selections["home"], tactics["home"])
-    away_profile = build_team_profile(teams_by_id[live_session.away_team_id], players_by_side["away"], selections["away"], tactics["away"])
+    home_plan = ensure_weekly_performance_plan(session, save, teams_by_id[live_session.home_team_id]) if live_session.home_team_id == live_session.user_team_id else None
+    away_plan = ensure_weekly_performance_plan(session, save, teams_by_id[live_session.away_team_id]) if live_session.away_team_id == live_session.user_team_id else None
+    home_medical = medical_assignment_map(session, save, teams_by_id[live_session.home_team_id]) if live_session.home_team_id == live_session.user_team_id else {}
+    away_medical = medical_assignment_map(session, save, teams_by_id[live_session.away_team_id]) if live_session.away_team_id == live_session.user_team_id else {}
+    home_profile = build_team_profile(
+        teams_by_id[live_session.home_team_id],
+        players_by_side["home"],
+        selections["home"],
+        tactics["home"],
+        performance_plan=home_plan,
+        medical_assignments=home_medical,
+    )
+    away_profile = build_team_profile(
+        teams_by_id[live_session.away_team_id],
+        players_by_side["away"],
+        selections["away"],
+        tactics["away"],
+        performance_plan=away_plan,
+        medical_assignments=away_medical,
+    )
     home_state = hydrate_team_state(home_profile, live_session.home_state)
     away_state = hydrate_team_state(away_profile, live_session.away_state)
 

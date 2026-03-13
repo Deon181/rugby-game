@@ -6,9 +6,11 @@ import { useGameStore } from "../store/useGameStore";
 const baseNavItems = [
   { to: "/", label: "Dashboard" },
   { to: "/squad", label: "Squad" },
+  { to: "/performance", label: "Performance" },
   { to: "/tactics", label: "Tactics" },
   { to: "/fixtures", label: "Fixtures" },
   { to: "/table", label: "League Table" },
+  { to: "/finance", label: "Finance" },
   { to: "/transfers", label: "Recruitment" },
   { to: "/club", label: "Club Overview" },
   { to: "/match-centre", label: "Match Centre" },

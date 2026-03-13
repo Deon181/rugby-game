@@ -7,11 +7,13 @@ import { useGameStore } from "./store/useGameStore";
 
 const ClubOverviewPage = lazy(() => import("./pages/ClubOverviewPage").then((module) => ({ default: module.ClubOverviewPage })));
 const DashboardPage = lazy(() => import("./pages/DashboardPage").then((module) => ({ default: module.DashboardPage })));
+const FinancePage = lazy(() => import("./pages/FinancePage").then((module) => ({ default: module.FinancePage })));
 const FixturesPage = lazy(() => import("./pages/FixturesPage").then((module) => ({ default: module.FixturesPage })));
 const InboxPage = lazy(() => import("./pages/InboxPage").then((module) => ({ default: module.InboxPage })));
 const MatchCentrePage = lazy(() => import("./pages/MatchCentrePage").then((module) => ({ default: module.MatchCentrePage })));
 const NewGamePage = lazy(() => import("./pages/NewGamePage").then((module) => ({ default: module.NewGamePage })));
 const OffseasonPage = lazy(() => import("./pages/OffseasonPage").then((module) => ({ default: module.OffseasonPage })));
+const PerformancePage = lazy(() => import("./pages/PerformancePage").then((module) => ({ default: module.PerformancePage })));
 const SquadPage = lazy(() => import("./pages/SquadPage").then((module) => ({ default: module.SquadPage })));
 const TablePage = lazy(() => import("./pages/TablePage").then((module) => ({ default: module.TablePage })));
 const TacticsPage = lazy(() => import("./pages/TacticsPage").then((module) => ({ default: module.TacticsPage })));
@@ -48,9 +50,11 @@ function AppRoutes() {
           <Route path="/" element={currentSave.phase === "in_season" ? <DashboardPage /> : <Navigate to="/offseason" replace />} />
           <Route path="/offseason" element={<OffseasonPage />} />
           <Route path="/squad" element={<SquadPage />} />
+          <Route path="/performance" element={<PerformancePage />} />
           <Route path="/tactics" element={<TacticsPage />} />
           <Route path="/fixtures" element={<FixturesPage />} />
           <Route path="/table" element={<TablePage />} />
+          <Route path="/finance" element={<FinancePage />} />
           <Route path="/transfers" element={<TransfersPage />} />
           <Route path="/club" element={<ClubOverviewPage />} />
           <Route path="/match-centre" element={<MatchCentrePage />} />

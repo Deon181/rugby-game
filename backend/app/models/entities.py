@@ -203,6 +203,59 @@ class RecruitmentTarget(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utcnow)
 
 
+class BoardState(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    save_game_id: int = Field(foreign_key="savegame.id", index=True)
+    team_id: int = Field(foreign_key="team.id", index=True)
+    season_number: int = Field(default=1, index=True)
+    confidence: int = Field(default=64)
+    pressure_state: str = Field(default="stable", index=True)
+    operating_focus: str = Field(default="balanced")
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+class FinanceTransaction(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    save_game_id: int = Field(foreign_key="savegame.id", index=True)
+    team_id: int = Field(foreign_key="team.id", index=True)
+    season_number: int = Field(default=1, index=True)
+    week: int = Field(default=1, index=True)
+    category: str
+    amount: int
+    balance_after: int
+    note: str
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class WeeklyPerformancePlan(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    save_game_id: int = Field(foreign_key="savegame.id", index=True)
+    team_id: int = Field(foreign_key="team.id", index=True)
+    season_number: int = Field(default=1, index=True)
+    week: int = Field(default=1, index=True)
+    focus: str = Field(default="fitness")
+    intensity: str = Field(default="balanced")
+    contact_level: str = Field(default="balanced")
+    prepared: bool = Field(default=False)
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+class PlayerMedicalAssignment(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    save_game_id: int = Field(foreign_key="savegame.id", index=True)
+    team_id: int = Field(foreign_key="team.id", index=True)
+    season_number: int = Field(default=1, index=True)
+    week: int = Field(default=1, index=True)
+    player_id: int = Field(foreign_key="player.id", index=True)
+    rehab_mode: str = Field(default="standard")
+    clearance_status: str = Field(default="full")
+    return_watch_weeks: int = Field(default=0)
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
 class InboxMessage(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     save_game_id: int = Field(foreign_key="savegame.id", index=True)

@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from sqlmodel import Session, select
 
 from backend.app.models.entities import InboxMessage, Player, Team, TeamSelection, TransferListing
+from backend.app.services.finance import log_budget_transaction, log_contract_commitment
 from backend.app.services.recruitment import close_recruitment_target, get_contract_watch_player
 from backend.app.services.game import get_active_save, get_user_team
 from backend.app.services.selection import build_best_selection
@@ -38,7 +39,14 @@ def make_transfer_bid(session: Session, listing_id: int, amount: int) -> dict[st
         raise HTTPException(status_code=400, detail="Insufficient wage budget.")
 
     seller = session.get(Team, player.team_id) if player.team_id is not None else None
-    user_team.budget -= amount
+    log_budget_transaction(
+        session,
+        save,
+        user_team,
+        category="transfer_fee",
+        amount=-amount,
+        note=f"Transfer fee agreed for {player.first_name} {player.last_name}.",
+    )
     if seller:
         seller.budget += amount
     player.team_id = user_team.id
@@ -105,10 +113,20 @@ def renew_contract(session: Session, player_id: int, years: int, weekly_wage: in
             detail=f"{player.first_name} is looking for at least a {contract_watch.minimum_years}-year commitment.",
         )
 
+    previous_wage = player.wage
     player.wage = weekly_wage
     player.contract_years_remaining = years
     player.contract_last_renewed_season = save.season_number
     player.morale = min(97, player.morale + (8 if weekly_wage >= contract_watch.recommended_max_wage else 6))
+    log_contract_commitment(
+        session,
+        save,
+        user_team,
+        player_name=f"{player.first_name} {player.last_name}",
+        previous_wage=previous_wage,
+        new_wage=weekly_wage,
+        years=years,
+    )
     session.add(player)
     session.add(
         InboxMessage(

@@ -17,7 +17,13 @@ def player_can_cover_slot(player: Player, slot: str) -> bool:
     return slot in player.secondary_positions
 
 
-def validate_selection(players: list[Player], request: SelectionUpdateRequest) -> None:
+def validate_selection(
+    players: list[Player],
+    request: SelectionUpdateRequest,
+    *,
+    blocked_player_ids: set[int] | None = None,
+) -> None:
+    blocked_player_ids = blocked_player_ids or set()
     players_by_id = {player.id: player for player in players}
 
     if len(request.starting_lineup) != len(LINEUP_SLOTS):
@@ -39,7 +45,7 @@ def validate_selection(players: list[Player], request: SelectionUpdateRequest) -
         player = players_by_id.get(assignment.player_id)
         if player is None:
             raise SelectionValidationError(f"Unknown player {assignment.player_id} in lineup.")
-        if player.injury_weeks_remaining > 0 or player.suspended_matches > 0:
+        if player.injury_weeks_remaining > 0 or player.suspended_matches > 0 or player.id in blocked_player_ids:
             raise SelectionValidationError(f"{player.first_name} {player.last_name} is unavailable.")
         if not player_can_cover_slot(player, assignment.slot):
             raise SelectionValidationError(
@@ -76,8 +82,13 @@ def validate_selection(players: list[Player], request: SelectionUpdateRequest) -
         raise SelectionValidationError("Goal kicker must be part of the matchday 23.")
 
 
-def build_best_selection(players: list[Player]) -> SelectionUpdateRequest:
-    available = [player for player in players if player.injury_weeks_remaining == 0 and player.suspended_matches == 0]
+def build_best_selection(players: list[Player], *, blocked_player_ids: set[int] | None = None) -> SelectionUpdateRequest:
+    blocked_player_ids = blocked_player_ids or set()
+    available = [
+        player
+        for player in players
+        if player.injury_weeks_remaining == 0 and player.suspended_matches == 0 and player.id not in blocked_player_ids
+    ]
     chosen_ids: set[int] = set()
     starting_lineup = []
     for slot in LINEUP_SLOTS:
@@ -152,5 +163,5 @@ def build_best_selection(players: list[Player]) -> SelectionUpdateRequest:
         captain_id=captain.id,
         goal_kicker_id=kicker.id,
     )
-    validate_selection(players, request)
+    validate_selection(players, request, blocked_player_ids=blocked_player_ids)
     return request

@@ -7,6 +7,8 @@ from backend.app.schemas.api import (
     ClubOption,
     ContractRenewRequest,
     DashboardResponse,
+    FinanceOverviewResponse,
+    FinanceSettingsUpdateRequest,
     FixtureListResponse,
     InboxResponse,
     LiveMatchHalftimeRequest,
@@ -15,6 +17,9 @@ from backend.app.schemas.api import (
     NewSaveRequest,
     NewSaveResponse,
     OffseasonStatusResponse,
+    PerformanceOverviewResponse,
+    PerformancePlanUpdateRequest,
+    MedicalAssignmentUpdateRequest,
     RecruitmentResponse,
     SaveSummary,
     SeasonHistoryResponse,
@@ -31,6 +36,8 @@ from backend.app.schemas.api import (
     YouthIntakeResponse,
 )
 from backend.app.services.career import advance_offseason, promote_youth_prospect
+from backend.app.services.finance import get_finance_overview, update_finance_settings
+from backend.app.services.performance import get_performance_overview, update_medical_assignment, update_performance_plan
 from backend.app.services.game import (
     create_new_save,
     get_career_status,
@@ -90,6 +97,38 @@ def career_status(session: Session = Depends(get_session)) -> SaveSummary:
 @api_router.get("/dashboard", response_model=DashboardResponse)
 def dashboard(session: Session = Depends(get_session)) -> DashboardResponse:
     return get_dashboard(session)
+
+
+@api_router.get("/finance", response_model=FinanceOverviewResponse)
+def finance(session: Session = Depends(get_session)) -> FinanceOverviewResponse:
+    return get_finance_overview(session)
+
+
+@api_router.put("/finance/settings", response_model=FinanceOverviewResponse)
+def finance_settings(request: FinanceSettingsUpdateRequest, session: Session = Depends(get_session)) -> FinanceOverviewResponse:
+    return update_finance_settings(session, request)
+
+
+@api_router.get("/performance", response_model=PerformanceOverviewResponse)
+def performance(session: Session = Depends(get_session)) -> PerformanceOverviewResponse:
+    return get_performance_overview(session)
+
+
+@api_router.put("/performance/plan", response_model=PerformanceOverviewResponse)
+def performance_plan(
+    request: PerformancePlanUpdateRequest,
+    session: Session = Depends(get_session),
+) -> PerformanceOverviewResponse:
+    return update_performance_plan(session, request)
+
+
+@api_router.put("/performance/medical/{player_id}", response_model=PerformanceOverviewResponse)
+def performance_medical(
+    player_id: int,
+    request: MedicalAssignmentUpdateRequest,
+    session: Session = Depends(get_session),
+) -> PerformanceOverviewResponse:
+    return update_medical_assignment(session, player_id, request)
 
 
 @api_router.get("/club", response_model=TeamOverviewRead)

@@ -6,9 +6,32 @@ from datetime import datetime, timezone
 from fastapi import HTTPException
 from sqlmodel import Session, select
 
-from backend.app.models.entities import Fixture, InboxMessage, MatchResult, Player, SaveGame, Team, TeamSelection, TeamTactics
+from backend.app.models.entities import (
+    Fixture,
+    InboxMessage,
+    MatchResult,
+    Player,
+    PlayerMedicalAssignment,
+    SaveGame,
+    Team,
+    TeamSelection,
+    TeamTactics,
+    WeeklyPerformancePlan,
+)
 from backend.app.schemas.api import AdvanceWeekResponse, SelectionSlotRead, SelectionUpdateRequest
 from backend.app.services.career import enter_season_review
+from backend.app.services.finance import process_user_weekly_finance
+from backend.app.services.performance import (
+    carry_forward_performance_plan,
+    ensure_week_medical_assignments,
+    ensure_weekly_performance_plan,
+    mark_recent_return,
+    medical_assignment_map,
+    rehab_bonus,
+    recovery_bonus,
+    selection_blocked_player_ids,
+    sync_tactics_training_focus,
+)
 from backend.app.services.game import (
     build_save_summary,
     get_active_save,
@@ -30,18 +53,51 @@ class WeekContext:
     selections_by_team: dict[int, TeamSelection]
 
 
-def _apply_between_week_recovery(players: list[Player]) -> None:
+def _apply_between_week_recovery(
+    players: list[Player],
+    *,
+    user_team_id: int | None = None,
+    performance_plan: WeeklyPerformancePlan | None = None,
+    medical_assignments: dict[int, PlayerMedicalAssignment] | None = None,
+    recovery_boost: int = 0,
+    rehab_support: int = 0,
+) -> set[int]:
+    recovered_ids: set[int] = set()
     for player in players:
+        assignment = medical_assignments.get(player.id) if medical_assignments and player.team_id == user_team_id else None
+        extra_injury_reduction = 0
+        if assignment and player.injury_weeks_remaining > 0 and assignment.rehab_mode in {"physio", "accelerated"}:
+            extra_injury_reduction = 1 + rehab_support
         if player.injury_weeks_remaining > 0:
-            player.injury_weeks_remaining = max(0, player.injury_weeks_remaining - 1)
+            player.injury_weeks_remaining = max(0, player.injury_weeks_remaining - 1 - extra_injury_reduction)
             if player.injury_weeks_remaining == 0:
                 player.injury_status = "Healthy"
-                player.fitness = min(98, player.fitness + 8)
+                if assignment and assignment.rehab_mode == "physio":
+                    player.fitness = min(98, player.fitness + 12)
+                elif assignment and assignment.rehab_mode == "accelerated":
+                    player.fitness = min(96, player.fitness + 2)
+                    player.fatigue = min(99, player.fatigue + 6)
+                else:
+                    player.fitness = min(98, player.fitness + 8)
+                recovered_ids.add(player.id)
         if player.suspended_matches > 0:
             player.suspended_matches = max(0, player.suspended_matches - 1)
         if player.injury_weeks_remaining == 0:
-            player.fatigue = max(0, player.fatigue - 5)
-            player.fitness = min(99, player.fitness + 3)
+            fatigue_reduction = 5
+            fitness_gain = 3
+            if player.team_id == user_team_id and performance_plan:
+                if performance_plan.intensity == "light":
+                    fatigue_reduction += 2 + recovery_boost
+                    fitness_gain += 1 + recovery_boost
+                elif performance_plan.intensity == "heavy":
+                    fatigue_reduction = max(1, fatigue_reduction - 2)
+                    fitness_gain = max(0, fitness_gain - 2)
+                else:
+                    fatigue_reduction += recovery_boost
+                    fitness_gain += recovery_boost
+            player.fatigue = max(0, player.fatigue - fatigue_reduction)
+            player.fitness = min(99, player.fitness + fitness_gain)
+    return recovered_ids
 
 
 def _apply_post_match_effects(
@@ -51,6 +107,8 @@ def _apply_post_match_effects(
     outcomes: dict[int, object],
     won: bool,
     drew: bool,
+    performance_plan: WeeklyPerformancePlan | None = None,
+    medical_assignments: dict[int, PlayerMedicalAssignment] | None = None,
 ) -> None:
     starter_ids = {slot["player_id"] for slot in selection.starting_lineup}
     bench_ids = set(selection.bench_player_ids)
@@ -70,6 +128,21 @@ def _apply_post_match_effects(
             player.fitness = min(99, player.fitness + 2)
         if tactics.training_focus == "recovery":
             player.fatigue = max(0, player.fatigue - 2)
+        if performance_plan:
+            if player.id in starter_ids:
+                if performance_plan.intensity == "heavy":
+                    player.fatigue = min(99, player.fatigue + 4)
+                    player.fitness = max(40, player.fitness - 2)
+                elif performance_plan.intensity == "light":
+                    player.fatigue = max(0, player.fatigue - 3)
+                    player.fitness = min(99, player.fitness + 1)
+            elif player.id in bench_ids:
+                if performance_plan.intensity == "heavy":
+                    player.fatigue = min(99, player.fatigue + 2)
+                elif performance_plan.intensity == "light":
+                    player.fatigue = max(0, player.fatigue - 2)
+            elif performance_plan.intensity == "light":
+                player.fatigue = max(0, player.fatigue - 1)
 
         if won:
             player.morale = min(99, player.morale + (3 if player.id in matchday_ids else 1))
@@ -91,6 +164,14 @@ def _apply_post_match_effects(
                 player.injury_status = outcome.injury_status
                 player.injury_weeks_remaining = outcome.injury_weeks_remaining
             player.suspended_matches = max(0, player.suspended_matches + outcome.suspended_matches_delta)
+        assignment = medical_assignments.get(player.id) if medical_assignments else None
+        if assignment and assignment.clearance_status == "managed":
+            if player.id in starter_ids:
+                player.fatigue = min(99, player.fatigue + 8)
+                player.fitness = max(35, player.fitness - 4)
+            elif player.id in bench_ids:
+                player.fatigue = min(99, player.fatigue + 3)
+                player.fitness = max(35, player.fitness - 2)
 
 
 def _create_contract_warnings(session: Session, save: SaveGame, team: Team, players: list[Player]) -> None:
@@ -110,7 +191,13 @@ def _create_contract_warnings(session: Session, save: SaveGame, team: Team, play
         )
 
 
-def _repair_selection_if_needed(players: list[Player], selection: TeamSelection) -> SelectionUpdateRequest:
+def _repair_selection_if_needed(
+    players: list[Player],
+    selection: TeamSelection,
+    *,
+    blocked_player_ids: set[int] | None = None,
+) -> SelectionUpdateRequest:
+    blocked_player_ids = blocked_player_ids or set()
     current = SelectionUpdateRequest(
         starting_lineup=[SelectionSlotRead(**slot) for slot in selection.starting_lineup],
         bench_player_ids=selection.bench_player_ids,
@@ -118,18 +205,40 @@ def _repair_selection_if_needed(players: list[Player], selection: TeamSelection)
         goal_kicker_id=selection.goal_kicker_id,
     )
     try:
-        validate_selection(players, current)
+        validate_selection(players, current, blocked_player_ids=blocked_player_ids)
         return current
     except SelectionValidationError:
-        return build_best_selection(players)
+        return build_best_selection(players, blocked_player_ids=blocked_player_ids)
 
 
-def apply_between_week_recovery(session: Session, save: SaveGame) -> None:
+def apply_between_week_recovery(session: Session, save: SaveGame) -> bool:
+    if save.phase != "in_season":
+        return False
+    user_team = get_user_team(session, save)
+    performance_plan = ensure_weekly_performance_plan(session, save, user_team)
+    if performance_plan.prepared:
+        return False
     all_players = session.exec(select(Player).where(Player.save_game_id == save.id)).all()
-    _apply_between_week_recovery(all_players)
+    medical_assignments = medical_assignment_map(session, save, user_team)
+    recovered_ids = _apply_between_week_recovery(
+        all_players,
+        user_team_id=user_team.id,
+        performance_plan=performance_plan,
+        medical_assignments=medical_assignments,
+        recovery_boost=recovery_bonus(user_team),
+        rehab_support=rehab_bonus(user_team),
+    )
     for player in all_players:
         session.add(player)
+        if player.team_id == user_team.id and player.id in recovered_ids:
+            mark_recent_return(session, save, user_team, player)
+    ensure_week_medical_assignments(session, save, user_team)
+    sync_tactics_training_focus(session, user_team, performance_plan.focus)
+    performance_plan.prepared = True
+    performance_plan.updated_at = datetime.now(timezone.utc)
+    session.add(performance_plan)
     session.flush()
+    return True
 
 
 def load_week_context(session: Session, save: SaveGame) -> WeekContext:
@@ -149,7 +258,12 @@ def load_week_context(session: Session, save: SaveGame) -> WeekContext:
         players_by_team[team.id] = session.exec(select(Player).where(Player.team_id == team.id)).all()
         tactics_by_team[team.id] = session.exec(select(TeamTactics).where(TeamTactics.team_id == team.id)).first()
         selections_by_team[team.id] = session.exec(select(TeamSelection).where(TeamSelection.team_id == team.id)).first()
-        repaired = _repair_selection_if_needed(players_by_team[team.id], selections_by_team[team.id])
+        blocked_ids = selection_blocked_player_ids(session, save, team) if team.is_user_team else set()
+        repaired = _repair_selection_if_needed(
+            players_by_team[team.id],
+            selections_by_team[team.id],
+            blocked_player_ids=blocked_ids,
+        )
         selections_by_team[team.id].starting_lineup = [slot.model_dump() for slot in repaired.starting_lineup]
         selections_by_team[team.id].bench_player_ids = repaired.bench_player_ids
         selections_by_team[team.id].captain_id = repaired.captain_id
@@ -220,6 +334,10 @@ def record_fixture_result(
     home_win = result.home_score > result.away_score
     away_win = result.away_score > result.home_score
     drew = result.home_score == result.away_score
+    home_plan = ensure_weekly_performance_plan(session, save, home_team) if home_team.is_user_team else None
+    away_plan = ensure_weekly_performance_plan(session, save, away_team) if away_team.is_user_team else None
+    home_medical = medical_assignment_map(session, save, home_team) if home_team.is_user_team else {}
+    away_medical = medical_assignment_map(session, save, away_team) if away_team.is_user_team else {}
     _apply_post_match_effects(
         context.players_by_team[home_team.id],
         context.selections_by_team[home_team.id],
@@ -227,6 +345,8 @@ def record_fixture_result(
         simulation.home.outcomes,
         won=home_win,
         drew=drew,
+        performance_plan=home_plan,
+        medical_assignments=home_medical,
     )
     _apply_post_match_effects(
         context.players_by_team[away_team.id],
@@ -235,6 +355,8 @@ def record_fixture_result(
         simulation.away.outcomes,
         won=away_win,
         drew=drew,
+        performance_plan=away_plan,
+        medical_assignments=away_medical,
     )
     return result
 
@@ -298,9 +420,11 @@ def finalize_current_week(
         _create_contract_warnings(session, save, user_team, user_players)
 
     progress_scouting_targets(session, save)
+    process_user_weekly_finance(session, save, user_team, user_result_fixture_id=user_result_fixture_id)
     save.current_week += 1
     save.updated_at = datetime.now(timezone.utc)
     session.add(save)
+    carry_forward_performance_plan(session, save, user_team)
     session.commit()
 
     season_complete = save.current_week > save.total_weeks

@@ -2,12 +2,14 @@ import type {
   AdvanceWeekResponse,
   ClubOption,
   Dashboard,
+  FinanceOverview,
   FixtureList,
   InboxResponse,
   LiveMatchHalftimePayload,
   LiveMatchSnapshot,
   MatchResult,
   OffseasonStatusResponse,
+  PerformanceOverview,
   RecruitmentResponse,
   SaveSummary,
   SeasonHistoryResponse,
@@ -45,6 +47,17 @@ export const api = {
     request<{ save: SaveSummary }>("/api/saves", { method: "POST", body: JSON.stringify(payload) }),
   careerStatus: () => request<SaveSummary>("/api/career/status"),
   dashboard: () => request<Dashboard>("/api/dashboard"),
+  finance: () => request<FinanceOverview>("/api/finance"),
+  updateFinanceSettings: (payload: { operating_focus: string }) =>
+    request<FinanceOverview>("/api/finance/settings", { method: "PUT", body: JSON.stringify(payload) }),
+  performance: () => request<PerformanceOverview>("/api/performance"),
+  updatePerformancePlan: (payload: { focus: string; intensity: string; contact_level: string }) =>
+    request<PerformanceOverview>("/api/performance/plan", { method: "PUT", body: JSON.stringify(payload) }),
+  updateMedicalAssignment: (playerId: number, payload: { rehab_mode?: string; clearance_status?: string }) =>
+    request<PerformanceOverview>(`/api/performance/medical/${playerId}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
   club: () => request<TeamOverview>("/api/club"),
   squad: () => request<SquadResponse>("/api/squad"),
   tactics: () => request<Tactics>("/api/tactics"),

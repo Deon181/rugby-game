@@ -20,10 +20,11 @@ import { StatCard } from "../components/StatCard";
 import { api } from "../lib/api";
 import { formatMoney } from "../lib/format";
 import { buildFormSnapshot, getFixtureOpponentName, getTableRow } from "../lib/insights";
-import type { Dashboard, LiveMatchSnapshot, TableResponse } from "../lib/types";
+import type { Dashboard, FinanceOverview, LiveMatchSnapshot, TableResponse } from "../lib/types";
 
 type DashboardBundle = {
   dashboard: Dashboard;
+  finance: FinanceOverview;
   table: TableResponse;
   liveMatch: LiveMatchSnapshot | null;
 };
@@ -58,8 +59,13 @@ export function DashboardPage() {
     setLoading(true);
     setError(null);
     try {
-      const [dashboard, table, liveMatch] = await Promise.all([api.dashboard(), api.table(), api.currentLiveMatch()]);
-      setBundle({ dashboard, table, liveMatch });
+      const [dashboard, finance, table, liveMatch] = await Promise.all([
+        api.dashboard(),
+        api.finance(),
+        api.table(),
+        api.currentLiveMatch(),
+      ]);
+      setBundle({ dashboard, finance, table, liveMatch });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Failed to load dashboard");
     } finally {
@@ -79,7 +85,7 @@ export function DashboardPage() {
     return <EmptyState title="No dashboard data" body={error ?? "The dashboard could not be loaded."} />;
   }
 
-  const { dashboard, table, liveMatch } = bundle;
+  const { dashboard, finance, table, liveMatch } = bundle;
   const formSnapshot = buildFormSnapshot(dashboard.recent_results, dashboard.save.user_team_id);
   const opponentId =
     dashboard.next_fixture?.home_team_id === dashboard.save.user_team_id
@@ -172,6 +178,18 @@ export function DashboardPage() {
           detail={dashboard.injury_summary.players.join(", ") || "No current injury concerns."}
           accent={dashboard.injury_summary.count > 0 ? "danger" : "success"}
         />
+        <StatCard
+          label="Board Confidence"
+          value={`${finance.board.confidence}/100`}
+          detail={`${finance.board.pressure_state} pressure · ${finance.board.operating_focus} focus`}
+          accent={
+            finance.board.pressure_state === "critical"
+              ? "danger"
+              : finance.board.pressure_state === "watch"
+                ? "warn"
+                : "success"
+          }
+        />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
@@ -247,6 +265,14 @@ export function DashboardPage() {
                     <button className="btn-ghost justify-between" onClick={() => navigate("/transfers")}>
                       <span>Open recruitment hub</span>
                       <span className="text-muted">{formatMoney(dashboard.budget_snapshot.transfer_budget)}</span>
+                    </button>
+                    <button className="btn-ghost justify-between" onClick={() => navigate("/finance")}>
+                      <span>Open finance room</span>
+                      <span className="text-muted">{finance.board.confidence}/100</span>
+                    </button>
+                    <button className="btn-ghost justify-between" onClick={() => navigate("/performance")}>
+                      <span>Open performance hub</span>
+                      <span className="text-muted">{dashboard.morale_summary.average_fitness} fit</span>
                     </button>
                     <button className="btn-ghost justify-between" onClick={() => navigate("/inbox")}>
                       <span>Open inbox</span>
@@ -364,16 +390,27 @@ export function DashboardPage() {
 
             <div className="rounded-2xl bg-slate-950/30 p-4">
               <div className="stat-label">Board Pressure</div>
-              <div className="mt-3 font-display text-3xl font-semibold">
-                #{dashboard.league_position}
+              <div
+                className={`mt-3 font-display text-3xl font-semibold capitalize ${
+                  finance.board.pressure_state === "critical"
+                    ? "text-danger"
+                    : finance.board.pressure_state === "watch"
+                      ? "text-warn"
+                      : "text-success"
+                }`}
+              >
+                {finance.board.pressure_state}
               </div>
               <p className="mt-2 text-sm text-muted">
-                {userRow
-                  ? `${userRow.wins}W-${userRow.draws}D-${userRow.losses}L with ${userRow.table_points} points and a ${userRow.points_difference >= 0 ? "+" : ""}${userRow.points_difference} difference.`
-                  : "League context is not available right now."}
+                {finance.board.drivers[0] ?? "Board messaging is not available right now."}
               </p>
-              <div className="mt-5 rounded-2xl border border-border bg-white/5 p-4 text-sm text-muted">
-                {dashboard.board_objective}
+              <div className="mt-5 space-y-3">
+                <div className="rounded-2xl border border-border bg-white/5 p-4 text-sm text-muted">
+                  {finance.board.objective}
+                </div>
+                <div className="rounded-2xl border border-border bg-white/5 p-4 text-sm text-muted">
+                  Projection: {formatMoney(finance.summary.projected_balance_4_weeks)} · Focus {finance.board.operating_focus}
+                </div>
               </div>
             </div>
           </div>

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { LoadingPanel } from "../components/LoadingPanel";
 import { PageHeader } from "../components/PageHeader";
 import { SectionCard } from "../components/SectionCard";
 import { api } from "../lib/api";
 import { formatMoney } from "../lib/format";
-import type { Selection, SquadPlayer, SquadResponse } from "../lib/types";
+import type { PerformanceOverview, Selection, SquadPlayer, SquadResponse } from "../lib/types";
 
 const lineupSlots = [
   "Loosehead Prop",
@@ -33,15 +34,22 @@ function eligibleForSlot(players: SquadPlayer[], slot: string, selectedId: numbe
 }
 
 export function SquadPage() {
+  const navigate = useNavigate();
   const [squad, setSquad] = useState<SquadResponse | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
+  const [performance, setPerformance] = useState<PerformanceOverview | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   async function loadData() {
-    const [squadResponse, selectionResponse] = await Promise.all([api.squad(), api.selection()]);
+    const [squadResponse, selectionResponse, performanceResponse] = await Promise.all([
+      api.squad(),
+      api.selection(),
+      api.performance(),
+    ]);
     setSquad(squadResponse);
     setSelection(selectionResponse);
+    setPerformance(performanceResponse);
   }
 
   useEffect(() => {
@@ -53,6 +61,13 @@ export function SquadPage() {
     () => new Set([...(selection?.starting_lineup.map((slot) => slot.player_id) ?? []), ...(selection?.bench_player_ids ?? [])]),
     [selection],
   );
+  const medicalByPlayerId = useMemo(() => {
+    const map = new Map<number, PerformanceOverview["medical_board"][number]>();
+    for (const entry of [...(performance?.medical_board ?? []), ...(performance?.fatigue_watch ?? [])]) {
+      map.set(entry.player_id, entry);
+    }
+    return map;
+  }, [performance]);
 
   async function saveSelection() {
     if (!selection) {
@@ -91,9 +106,14 @@ export function SquadPage() {
         title={`${squad.team.name} Squad`}
         description="Shape the starting XV, bench, captaincy, and contract picture while monitoring fitness, fatigue, morale, and injuries."
         actions={
-          <button className="btn-primary" onClick={() => void saveSelection()} disabled={saving}>
-            {saving ? "Saving..." : "Save Matchday Squad"}
-          </button>
+          <>
+            <button className="btn-secondary" onClick={() => navigate("/performance")}>
+              Performance Hub
+            </button>
+            <button className="btn-primary" onClick={() => void saveSelection()} disabled={saving}>
+              {saving ? "Saving..." : "Save Matchday Squad"}
+            </button>
+          </>
         }
       />
       {message ? <div className="rounded-2xl bg-accentSoft px-4 py-3 text-sm">{message}</div> : null}
@@ -219,7 +239,15 @@ export function SquadPage() {
                     <td className="py-3">{player.fatigue}</td>
                     <td className="py-3">{player.contract_years_remaining}y</td>
                     <td className="py-3 text-muted">
-                      {player.injury_weeks_remaining > 0 ? `${player.injury_status} (${player.injury_weeks_remaining}w)` : "Available"}
+                      {player.injury_weeks_remaining > 0
+                        ? `${player.injury_status} (${player.injury_weeks_remaining}w)`
+                        : medicalByPlayerId.get(player.id)?.clearance_status === "managed"
+                          ? "Managed return"
+                          : medicalByPlayerId.get(player.id)?.clearance_status === "out"
+                            ? "Medically held out"
+                            : medicalByPlayerId.get(player.id)?.group === "fatigue"
+                              ? "Fatigue watch"
+                              : "Available"}
                     </td>
                     <td className="py-3">
                       {player.contract_years_remaining <= 2 ? (

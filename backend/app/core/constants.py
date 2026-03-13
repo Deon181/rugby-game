@@ -47,6 +47,11 @@ TACTIC_VALUES = {
 }
 
 TRAINING_FOCUSES = ["fitness", "attack", "defense", "set_piece", "recovery"]
+PERFORMANCE_INTENSITIES = ["light", "balanced", "heavy"]
+CONTACT_LEVELS = ["low", "balanced", "high"]
+REHAB_MODES = ["standard", "physio", "accelerated"]
+CLEARANCE_STATUSES = ["out", "managed", "full"]
+MEDICAL_ALERT_FATIGUE = 68
 
 SECONDARY_POSITION_MAP = {
     "Loosehead Prop": ["Hooker"],

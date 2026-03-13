@@ -28,6 +28,8 @@ from backend.app.seed.generator import (
     _position_variation,
     create_transfer_listings_for_season,
 )
+from backend.app.services.finance import apply_season_review_finance, ensure_board_state
+from backend.app.services.performance import ensure_weekly_performance_plan
 from backend.app.services.game import (
     build_save_summary,
     build_table,
@@ -143,7 +145,17 @@ def enter_season_review(session: Session) -> SaveSummary:
         team = next(team for team in teams if team.id == row.team_id)
         previous_objective = team.board_objective
         verdict, budget_delta, wage_delta = _board_outcome(row.position, expected_positions[team.id])
-        team.budget = max(2_000_000, team.budget + budget_delta)
+        if team.id == user_team.id:
+            apply_season_review_finance(
+                session,
+                save,
+                team,
+                verdict=verdict,
+                budget_delta=budget_delta,
+                final_position=row.position,
+            )
+        else:
+            team.budget = max(2_000_000, team.budget + budget_delta)
         team.wage_budget = max(1_500_000, team.wage_budget + wage_delta)
         team.board_objective = _next_objective_for_team(teams, team)
         session.add(team)
@@ -501,6 +513,8 @@ def advance_offseason(session: Session) -> SaveSummary:
         create_transfer_listings_for_season(session, save.id, save.season_number, user_team.id)
         _repair_all_selections(session, save)
         refreshed_user_team = get_user_team(session, save)
+        ensure_board_state(session, save, refreshed_user_team)
+        ensure_weekly_performance_plan(session, save, refreshed_user_team)
         session.add(
             InboxMessage(
                 save_game_id=save.id,

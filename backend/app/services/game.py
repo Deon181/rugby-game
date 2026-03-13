@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from fastapi import HTTPException, status
 from sqlalchemy import or_
 from sqlmodel import Session, select
@@ -270,8 +272,20 @@ def _phase_message(save: SaveGame) -> str | None:
     return None
 
 
+def _prepare_in_season_week(session: Session, save: SaveGame) -> SaveGame:
+    if save.phase != "in_season":
+        return save
+    from backend.app.services.progression import apply_between_week_recovery
+
+    if apply_between_week_recovery(session, save):
+        session.commit()
+        session.refresh(save)
+    return save
+
+
 def get_dashboard(session: Session) -> DashboardResponse:
     save = get_active_save(session)
+    save = _prepare_in_season_week(session, save)
     user_team = get_user_team(session, save)
     table = build_table(session, save)
     next_fixture = None
@@ -347,6 +361,7 @@ def get_club_overview(session: Session) -> TeamOverviewRead:
 
 def get_squad(session: Session) -> SquadResponse:
     save = get_active_save(session)
+    save = _prepare_in_season_week(session, save)
     team = get_user_team(session, save)
     players = session.exec(select(Player).where(Player.team_id == team.id).order_by(Player.primary_position, Player.overall_rating.desc())).all()
     return SquadResponse(
@@ -359,6 +374,7 @@ def get_squad(session: Session) -> SquadResponse:
 
 def get_tactics(session: Session) -> TacticsRead:
     save = get_active_save(session)
+    save = _prepare_in_season_week(session, save)
     team = get_user_team(session, save)
     tactics = session.exec(select(TeamTactics).where(TeamTactics.team_id == team.id)).first()
     return serialize_tactics(tactics)
@@ -366,6 +382,7 @@ def get_tactics(session: Session) -> TacticsRead:
 
 def update_tactics(session: Session, request: TacticsUpdateRequest) -> TacticsRead:
     save = get_active_save(session)
+    save = _prepare_in_season_week(session, save)
     team = get_user_team(session, save)
     for field_name, allowed_values in TACTIC_VALUES.items():
         value = getattr(request, field_name)
@@ -376,6 +393,13 @@ def update_tactics(session: Session, request: TacticsUpdateRequest) -> TacticsRe
     tactics = session.exec(select(TeamTactics).where(TeamTactics.team_id == team.id)).first()
     for key, value in request.model_dump().items():
         setattr(tactics, key, value)
+    if save.phase == "in_season":
+        from backend.app.services.performance import ensure_weekly_performance_plan
+
+        plan = ensure_weekly_performance_plan(session, save, team)
+        plan.focus = request.training_focus
+        plan.updated_at = datetime.now(timezone.utc)
+        session.add(plan)
     session.add(tactics)
     session.commit()
     session.refresh(tactics)
@@ -384,6 +408,7 @@ def update_tactics(session: Session, request: TacticsUpdateRequest) -> TacticsRe
 
 def get_selection(session: Session) -> SelectionRead:
     save = get_active_save(session)
+    save = _prepare_in_season_week(session, save)
     team = get_user_team(session, save)
     selection = session.exec(select(TeamSelection).where(TeamSelection.team_id == team.id)).first()
     return serialize_selection(selection)
@@ -391,10 +416,16 @@ def get_selection(session: Session) -> SelectionRead:
 
 def update_selection(session: Session, request: SelectionUpdateRequest) -> SelectionRead:
     save = get_active_save(session)
+    save = _prepare_in_season_week(session, save)
     team = get_user_team(session, save)
     players = session.exec(select(Player).where(Player.team_id == team.id)).all()
+    blocked_player_ids: set[int] = set()
+    if save.phase == "in_season":
+        from backend.app.services.performance import selection_blocked_player_ids
+
+        blocked_player_ids = selection_blocked_player_ids(session, save, team)
     try:
-        validate_selection(players, request)
+        validate_selection(players, request, blocked_player_ids=blocked_player_ids)
     except SelectionValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     selection = session.exec(select(TeamSelection).where(TeamSelection.team_id == team.id)).first()

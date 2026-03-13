@@ -4,7 +4,7 @@ import random
 from dataclasses import dataclass, field
 from typing import Any
 
-from backend.app.models.entities import Player, Team, TeamSelection, TeamTactics
+from backend.app.models.entities import Player, PlayerMedicalAssignment, Team, TeamSelection, TeamTactics, WeeklyPerformancePlan
 from backend.app.services.ratings import compute_derived_ratings
 from backend.app.simulation.config import CONFIG
 
@@ -14,6 +14,8 @@ class SelectedPlayer:
     player: Player
     slot: str
     is_starter: bool
+    injury_risk_multiplier: float = 1.0
+    managed_return: bool = False
 
 
 @dataclass
@@ -39,6 +41,7 @@ class TeamProfile:
     lineout_success: float
     line_break_threat: float
     position_fit: float
+    injury_risk_multiplier: float
 
 
 @dataclass
@@ -123,14 +126,48 @@ def build_team_profile(
     players: list[Player],
     selection: TeamSelection,
     tactics: TeamTactics,
+    performance_plan: WeeklyPerformancePlan | None = None,
+    medical_assignments: dict[int, PlayerMedicalAssignment] | None = None,
 ) -> TeamProfile:
     players_by_id = {player.id: player for player in players}
     starters = [
-        SelectedPlayer(player=players_by_id[entry["player_id"]], slot=entry["slot"], is_starter=True)
+        SelectedPlayer(
+            player=players_by_id[entry["player_id"]],
+            slot=entry["slot"],
+            is_starter=True,
+            injury_risk_multiplier=(
+                1.25
+                if medical_assignments
+                and (assignment := medical_assignments.get(entry["player_id"]))
+                and assignment.clearance_status == "managed"
+                else 1.0
+            ),
+            managed_return=bool(
+                medical_assignments
+                and (assignment := medical_assignments.get(entry["player_id"]))
+                and assignment.clearance_status == "managed"
+            ),
+        )
         for entry in selection.starting_lineup
     ]
     bench = [
-        SelectedPlayer(player=players_by_id[player_id], slot=players_by_id[player_id].primary_position, is_starter=False)
+        SelectedPlayer(
+            player=players_by_id[player_id],
+            slot=players_by_id[player_id].primary_position,
+            is_starter=False,
+            injury_risk_multiplier=(
+                1.1
+                if medical_assignments
+                and (assignment := medical_assignments.get(player_id))
+                and assignment.clearance_status == "managed"
+                else 1.0
+            ),
+            managed_return=bool(
+                medical_assignments
+                and (assignment := medical_assignments.get(player_id))
+                and assignment.clearance_status == "managed"
+            ),
+        )
         for player_id in selection.bench_player_ids
     ]
     captain = players_by_id[selection.captain_id]
@@ -171,6 +208,27 @@ def build_team_profile(
         line_break_scores.append((player.speed + player.handling + player.decision_making) / 3)
 
     bench_rating = sum(player.player.overall_rating for player in bench) / max(1, len(bench))
+    intensity_bonus = 0
+    contact_defense_bonus = 0
+    contact_set_piece_bonus = 0
+    discipline_penalty = 0
+    injury_multiplier = max(0.82, 1 - (team.staff_fitness - 68) / 320)
+    if performance_plan:
+        if performance_plan.intensity == "heavy":
+            intensity_bonus = 1
+            injury_multiplier *= 1.05
+        elif performance_plan.intensity == "light":
+            intensity_bonus = -1
+            injury_multiplier *= 0.95
+        if performance_plan.contact_level == "low":
+            contact_defense_bonus = -1
+            contact_set_piece_bonus = -1
+            injury_multiplier *= 0.85
+        elif performance_plan.contact_level == "high":
+            contact_defense_bonus = 1
+            contact_set_piece_bonus = 1
+            discipline_penalty = 1
+            injury_multiplier *= 1.2
 
     return TeamProfile(
         team=team,
@@ -179,11 +237,11 @@ def build_team_profile(
         bench=bench,
         captain=captain,
         goal_kicker=goal_kicker,
-        attack=(sum(attack_values) / len(attack_values)) + (2 if tactics.training_focus == "attack" else 0),
-        defense=(sum(defense_values) / len(defense_values)) + (2 if tactics.training_focus == "defense" else 0),
-        set_piece=(sum(set_piece_values) / len(set_piece_values)) + (2 if tactics.training_focus == "set_piece" else 0),
+        attack=(sum(attack_values) / len(attack_values)) + (2 if tactics.training_focus == "attack" else 0) + intensity_bonus,
+        defense=(sum(defense_values) / len(defense_values)) + (2 if tactics.training_focus == "defense" else 0) + intensity_bonus + contact_defense_bonus,
+        set_piece=(sum(set_piece_values) / len(set_piece_values)) + (2 if tactics.training_focus == "set_piece" else 0) + contact_set_piece_bonus,
         management=sum(management_values) / len(management_values),
-        discipline=sum(discipline_values) / len(discipline_values),
+        discipline=(sum(discipline_values) / len(discipline_values)) - discipline_penalty,
         breakdown=sum(breakdown_values) / len(breakdown_values),
         fitness=(sum(fitness_values) / len(fitness_values)) + (2 if tactics.training_focus == "fitness" else 0),
         fatigue=max(0, (sum(fatigue_values) / len(fatigue_values)) - (3 if tactics.training_focus == "recovery" else 0)),
@@ -194,6 +252,7 @@ def build_team_profile(
         lineout_success=sum(lineout_scores) / len(lineout_scores),
         line_break_threat=sum(line_break_scores) / len(line_break_scores),
         position_fit=sum(fit_scores) / len(fit_scores),
+        injury_risk_multiplier=injury_multiplier,
     )
 
 
@@ -300,6 +359,11 @@ def _pick_involved_player(rng: random.Random, selected_players: list[SelectedPla
             reverse=True,
         )
     return rng.choice(sorted_players[: max(3, len(sorted_players) // 2)]).player
+
+
+def _pick_injury_target(rng: random.Random, selected_players: list[SelectedPlayer]) -> SelectedPlayer:
+    weights = [selected.injury_risk_multiplier for selected in selected_players]
+    return rng.choices(selected_players, weights=weights, k=1)[0]
 
 
 def _ensure_outcome(state: TeamState, player: Player) -> PlayerOutcome:
@@ -525,10 +589,13 @@ def simulate_block(
                     )
 
     for state in (home_state, away_state):
-        injury_risk = 0.008 + max(0, state.profile.fatigue - 22) / 1600
+        injury_risk = (0.008 + max(0, state.profile.fatigue - 22) / 1600) * state.profile.injury_risk_multiplier
         if rng.random() < injury_risk:
-            injured = rng.choice(state.profile.starters + state.profile.bench).player
+            selected = _pick_injury_target(rng, state.profile.starters + state.profile.bench)
+            injured = selected.player
             weeks = rng.randint(1, 4)
+            if selected.managed_return and rng.random() < 0.45:
+                weeks = min(5, weeks + 1)
             outcome = _ensure_outcome(state, injured)
             outcome.injury_status = "Hamstring strain" if injured.speed > injured.strength else "Shoulder knock"
             outcome.injury_weeks_remaining = weeks
