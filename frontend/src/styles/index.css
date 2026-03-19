@@ -91,3 +91,23 @@ input {
 .metric-track {
   @apply h-3 overflow-hidden rounded-full bg-slate-950/40;
 }
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.kbd {
+  @apply inline-flex h-5 min-w-[20px] items-center justify-center rounded border border-border bg-slate-950/50 px-1 text-[10px] font-semibold text-muted;
+}

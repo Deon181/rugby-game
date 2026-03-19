@@ -24,16 +24,42 @@ import type {
   YouthIntakeResponse,
 } from "./types";
 
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+    public isNetworkError: boolean = false,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(path, {
-    headers: {
-      "Content-Type": "application/json",
-    },
-    ...options,
-  });
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      headers: {
+        "Content-Type": "application/json",
+      },
+      ...options,
+    });
+  } catch {
+    throw new ApiError("Network error — check your connection and try again.", 0, true);
+  }
   if (!response.ok) {
     const payload = await response.json().catch(() => ({ detail: "Request failed" }));
-    throw new Error(payload.detail ?? "Request failed");
+    const message = payload.detail ?? "Request failed";
+    if (response.status === 404) {
+      throw new ApiError(message, 404);
+    }
+    if (response.status === 409) {
+      throw new ApiError(message, 409);
+    }
+    if (response.status >= 500) {
+      throw new ApiError(`Server error: ${message}`, response.status);
+    }
+    throw new ApiError(message, response.status);
   }
   if (response.status === 204) {
     return undefined as T;

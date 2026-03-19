@@ -5,6 +5,7 @@ import { LoadingPanel } from "../components/LoadingPanel";
 import { PageHeader } from "../components/PageHeader";
 import { SectionCard } from "../components/SectionCard";
 import { StatCard } from "../components/StatCard";
+import { useToast } from "../components/Toast";
 import { api } from "../lib/api";
 import { formatMoney } from "../lib/format";
 import type { ContractWatchPlayer, RecruitmentListing, RecruitmentResponse } from "../lib/types";
@@ -51,8 +52,8 @@ function formatPotential(listing: RecruitmentListing) {
 }
 
 export function TransfersPage() {
+  const { toast } = useToast();
   const [data, setData] = useState<RecruitmentResponse | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [bidValues, setBidValues] = useState<Record<number, number>>({});
@@ -105,10 +106,10 @@ export function TransfersPage() {
     setBusyKey(`scout-${playerId}`);
     try {
       const response = await api.startScouting(playerId);
-      setMessage(response.message);
+      toast(response.message, "success");
       await loadRecruitment();
     } catch (reason) {
-      setMessage(reason instanceof Error ? reason.message : "Scouting assignment failed");
+      toast(reason instanceof Error ? reason.message : "Scouting assignment failed", "error");
     } finally {
       setBusyKey(null);
     }
@@ -118,10 +119,10 @@ export function TransfersPage() {
     setBusyKey(`shortlist-${playerId}`);
     try {
       const response = await api.toggleShortlist(playerId);
-      setMessage(response.message);
+      toast(response.message, "success");
       await loadRecruitment();
     } catch (reason) {
-      setMessage(reason instanceof Error ? reason.message : "Shortlist update failed");
+      toast(reason instanceof Error ? reason.message : "Shortlist update failed", "error");
     } finally {
       setBusyKey(null);
     }
@@ -131,10 +132,10 @@ export function TransfersPage() {
     setBusyKey(`bid-${listingId}`);
     try {
       const response = await api.bidTransfer(listingId, amount);
-      setMessage(response.message);
+      toast(response.message, "success");
       await loadRecruitment();
     } catch (reason) {
-      setMessage(reason instanceof Error ? reason.message : "Bid failed");
+      toast(reason instanceof Error ? reason.message : "Bid failed", "error");
     } finally {
       setBusyKey(null);
     }
@@ -149,10 +150,10 @@ export function TransfersPage() {
     setBusyKey(`renew-${player.player_id}`);
     try {
       const response = await api.renewContract(player.player_id, offer.years, offer.weeklyWage);
-      setMessage(response.message);
+      toast(response.message, "success");
       await loadRecruitment();
     } catch (reason) {
-      setMessage(reason instanceof Error ? reason.message : "Renewal failed");
+      toast(reason instanceof Error ? reason.message : "Renewal failed", "error");
     } finally {
       setBusyKey(null);
     }
@@ -183,7 +184,6 @@ export function TransfersPage() {
         }
       />
 
-      {message ? <div className="rounded-2xl bg-accentSoft px-4 py-3 text-sm">{message}</div> : null}
       {error ? <div className="rounded-2xl bg-danger/10 px-4 py-3 text-sm text-danger">{error}</div> : null}
 
       <div className="data-grid">
