@@ -6,6 +6,10 @@ import { LoadingPanel } from "../components/LoadingPanel";
 import { PageHeader } from "../components/PageHeader";
 import { SectionCard } from "../components/SectionCard";
 import { StatCard } from "../components/StatCard";
+import { DualStatBar } from "../components/match/DualStatBar";
+import { EventTimeline } from "../components/match/EventTimeline";
+import { MomentumBar } from "../components/match/MomentumBar";
+import { PitchSVG } from "../components/match/PitchSVG";
 import { api } from "../lib/api";
 import {
   buildCoachNotes,
@@ -69,6 +73,10 @@ function pressureLabel(value: number) {
   return "Pinned back";
 }
 
+function AnimatedScore({ score, colorClass }: { score: number; colorClass: string }) {
+  return <div className={`mt-2 font-display text-4xl font-bold score-pop ${colorClass}`}>{score}</div>;
+}
+
 function MatchSummary({ match, onBack }: { match: MatchResult; onBack: () => void }) {
   return (
     <div className="space-y-4">
@@ -122,44 +130,6 @@ function MatchSummary({ match, onBack }: { match: MatchResult; onBack: () => voi
         </SectionCard>
       </div>
     </div>
-  );
-}
-
-function PitchView({ live, userPressure }: { live: LiveMatchSnapshot; userPressure: number }) {
-  return (
-    <SectionCard title="Live Pitch" subtitle="Field position, recent event map, and territorial read on the current block.">
-      <div className="relative overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(34,197,94,0.18),rgba(4,120,87,0.24))] px-5 py-8">
-        <div className="absolute inset-0 bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.06)_0px,rgba(255,255,255,0.06)_1px,transparent_1px,transparent_12.5%)]" />
-        <div className="absolute inset-y-0 left-1/2 w-px bg-white/30" />
-        <div className="absolute inset-y-6 left-[22%] w-px border-l border-dashed border-white/20" />
-        <div className="absolute inset-y-6 right-[22%] w-px border-l border-dashed border-white/20" />
-        <div className="relative h-56">
-          <div className="flex justify-between text-xs font-semibold uppercase tracking-[0.25em] text-white/70">
-            <span>{live.home.team_name}</span>
-            <span>Halfway</span>
-            <span>{live.away.team_name}</span>
-          </div>
-          <div
-            className="absolute top-1/2 z-10 h-5 w-5 -translate-y-1/2 rounded-full border-2 border-slate-950 bg-amber-300 shadow-[0_0_18px_rgba(245,158,11,0.8)] transition-all duration-700"
-            style={{ left: `calc(${live.ball_position}% - 10px)` }}
-          />
-          {live.recent_events.slice(-3).map((event, index) => (
-            <div
-              key={`${event.minute}-${event.type}-${index}`}
-              className="absolute z-20 -translate-x-1/2 rounded-full bg-slate-950/85 px-3 py-1 text-[11px] font-medium text-white shadow-lg"
-              style={{ left: `${event.field_position}%`, top: `${24 + index * 18}%` }}
-            >
-              {event.type.replace("-", " ")}
-            </div>
-          ))}
-          <div className="absolute inset-x-0 bottom-0 flex items-center justify-between text-xs text-white/70">
-            <span>Home 22</span>
-            <span>{pressureLabel(userPressure)}</span>
-            <span>Away 22</span>
-          </div>
-        </div>
-      </div>
-    </SectionCard>
   );
 }
 
@@ -378,14 +348,37 @@ export function MatchCentrePage() {
       {error ? <div className="rounded-2xl bg-danger/10 px-4 py-3 text-sm text-danger">{error}</div> : null}
 
       <div className="data-grid">
-        <StatCard label={user.team_name} value={user.score} detail={`${user.tries} tries · ${user.penalties} penalties`} accent={user.score >= opponent.score ? "success" : "warn"} />
-        <StatCard label={opponent.team_name} value={opponent.score} detail={`${opponent.tries} tries · ${opponent.penalties} penalties`} accent={user.score >= opponent.score ? "warn" : "danger"} />
+        <div className="panel p-5">
+          <div className="stat-label">{user.team_name}</div>
+          <AnimatedScore
+            key={`home-${user.score}`}
+            score={user.score}
+            colorClass={user.score >= opponent.score ? "text-success" : "text-warn"}
+          />
+          <div className="mt-3 text-sm text-muted">{user.tries} tries · {user.penalties} penalties</div>
+        </div>
+        <div className="panel p-5">
+          <div className="stat-label">{opponent.team_name}</div>
+          <AnimatedScore
+            key={`away-${opponent.score}`}
+            score={opponent.score}
+            colorClass={user.score >= opponent.score ? "text-warn" : "text-danger"}
+          />
+          <div className="mt-3 text-sm text-muted">{opponent.tries} tries · {opponent.penalties} penalties</div>
+        </div>
         <StatCard label="Possession" value={`${user.stats.possession}%`} detail={`${opponent.stats.possession}% for ${opponent.team_name}`} accent={user.stats.possession >= 50 ? "success" : "warn"} />
         <StatCard label="Territory" value={`${user.stats.territory}%`} detail={`${opponent.stats.territory}% for ${opponent.team_name}`} accent={user.stats.territory >= 50 ? "success" : "warn"} />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
-        <PitchView live={live} userPressure={userPressure} />
+        <PitchSVG
+          ballPosition={live.ball_position}
+          recentEvents={live.recent_events}
+          homeTeamName={live.home.team_name}
+          awayTeamName={live.away.team_name}
+          commentaryLength={live.commentary.length}
+          userPressure={userPressure}
+        />
 
         <SectionCard title="Command Deck" subtitle="Playback control, scoreboard context, and the latest swing in the match.">
           <div className="space-y-4">
@@ -417,36 +410,26 @@ export function MatchCentrePage() {
             </div>
 
             <div className="space-y-4">
-              <div>
-                <div className="mb-2 flex justify-between text-xs uppercase tracking-[0.18em] text-muted">
-                  <span>Territorial pressure</span>
-                  <span>{userPressure}%</span>
-                </div>
-                <div className="metric-track">
-                  <div className="h-full bg-accent transition-all duration-700" style={{ width: `${userPressure}%` }} />
-                </div>
-              </div>
-              <div>
-                <div className="mb-2 flex justify-between text-xs uppercase tracking-[0.18em] text-muted">
-                  <span>Possession control</span>
-                  <span>{user.stats.possession}%</span>
-                </div>
-                <div className="metric-track">
-                  <div className="h-full bg-emerald-400 transition-all duration-700" style={{ width: `${user.stats.possession}%` }} />
-                </div>
-              </div>
-              <div>
-                <div className="mb-2 flex justify-between text-xs uppercase tracking-[0.18em] text-muted">
-                  <span>Set-piece efficiency</span>
-                  <span>{Math.round((user.stats.scrum_success + user.stats.lineout_success) / 2)}%</span>
-                </div>
-                <div className="metric-track">
-                  <div
-                    className="h-full bg-sky-400 transition-all duration-700"
-                    style={{ width: `${Math.round((user.stats.scrum_success + user.stats.lineout_success) / 2)}%` }}
-                  />
-                </div>
-              </div>
+              <DualStatBar
+                label="Possession"
+                homeValue={live.home.stats.possession ?? 50}
+                awayValue={live.away.stats.possession ?? 50}
+                homeLabel={live.home.team_name}
+                awayLabel={live.away.team_name}
+              />
+              <DualStatBar
+                label="Territory"
+                homeValue={live.home.stats.territory ?? 50}
+                awayValue={live.away.stats.territory ?? 50}
+                homeLabel={live.home.team_name}
+                awayLabel={live.away.team_name}
+              />
+              <MomentumBar
+                homeValue={Math.round(((live.home.stats.territory ?? 50) + (live.home.stats.possession ?? 50)) / 2)}
+                awayValue={Math.round(((live.away.stats.territory ?? 50) + (live.away.stats.possession ?? 50)) / 2)}
+                homeTeamName={live.home.team_name}
+                awayTeamName={live.away.team_name}
+              />
             </div>
 
             <div className="grid gap-3 text-sm">
@@ -631,19 +614,7 @@ export function MatchCentrePage() {
         )}
       </div>
 
-      <SectionCard title="Commentary Feed" subtitle="Live commentary scroll with the latest event pinned into view automatically.">
-        <div ref={commentaryRef} className="max-h-[520px] space-y-3 overflow-y-auto pr-2">
-          {live.commentary.map((event, index) => (
-            <div key={`${event.minute}-${event.type}-${index}`} className="rounded-2xl border border-border bg-slate-950/25 px-4 py-3">
-              <div className="flex items-center justify-between gap-4">
-                <div className="font-medium">{event.team}</div>
-                <div className="rounded-full bg-accentSoft px-3 py-1 text-xs font-semibold text-accent">{event.minute}'</div>
-              </div>
-              <p className="mt-2 text-sm text-muted">{event.text}</p>
-            </div>
-          ))}
-        </div>
-      </SectionCard>
+      <EventTimeline commentary={live.commentary} containerRef={commentaryRef} />
     </div>
   );
 }

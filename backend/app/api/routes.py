@@ -20,6 +20,7 @@ from backend.app.schemas.api import (
     PerformanceOverviewResponse,
     PerformancePlanUpdateRequest,
     MedicalAssignmentUpdateRequest,
+    PlayerDetailResponse,
     RecruitmentResponse,
     SaveSummary,
     SeasonHistoryResponse,
@@ -27,6 +28,7 @@ from backend.app.schemas.api import (
     SelectionRead,
     SelectionUpdateRequest,
     SquadResponse,
+    SquadStatsResponse,
     TableResponse,
     TacticsRead,
     TacticsUpdateRequest,
@@ -63,6 +65,7 @@ from backend.app.services.game import (
 from backend.app.services.recruitment import get_recruitment_board, start_scouting_target, toggle_shortlist_target
 from backend.app.services.live_match import get_current_live_match, start_live_match, submit_halftime_changes, tick_live_match
 from backend.app.services.progression import advance_week
+from backend.app.services.stats import get_player_detail, get_squad_season_stats
 from backend.app.services.transfers import make_transfer_bid, renew_contract
 
 
@@ -270,3 +273,18 @@ def inbox(session: Session = Depends(get_session)) -> InboxResponse:
 @api_router.get("/matches/{fixture_id}", response_model=MatchResultRead)
 def match_result(fixture_id: int, session: Session = Depends(get_session)) -> MatchResultRead:
     return get_match_result(session, fixture_id)
+
+
+@api_router.get("/players/{player_id}", response_model=PlayerDetailResponse)
+def player_detail(player_id: int, session: Session = Depends(get_session)) -> PlayerDetailResponse:
+    from backend.app.services.game import get_active_save
+    save = get_active_save(session)
+    return get_player_detail(session, save, player_id)
+
+
+@api_router.get("/squad/stats", response_model=SquadStatsResponse)
+def squad_stats(session: Session = Depends(get_session)) -> SquadStatsResponse:
+    from backend.app.services.game import get_active_save, get_user_team
+    save = get_active_save(session)
+    team = get_user_team(session, save)
+    return get_squad_season_stats(session, save, team.id)

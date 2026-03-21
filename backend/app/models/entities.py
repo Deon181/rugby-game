@@ -290,6 +290,30 @@ class TeamSeasonSummary(SQLModel, table=True):
     budget_delta: int
 
 
+class PlayerSeasonStats(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    save_game_id: int = Field(foreign_key="savegame.id", index=True)
+    player_id: int = Field(foreign_key="player.id", index=True)
+    team_id: int = Field(foreign_key="team.id")
+    season_number: int = Field(default=1)
+    appearances: int = Field(default=0)
+    starts: int = Field(default=0)
+    minutes_played: int = Field(default=0)
+    tries_scored: int = Field(default=0)
+    conversions: int = Field(default=0)
+    penalty_goals: int = Field(default=0)
+    drop_goals: int = Field(default=0)
+    tackles_made: int = Field(default=0)
+    tackles_missed: int = Field(default=0)
+    carries: int = Field(default=0)
+    line_breaks: int = Field(default=0)
+    yellow_cards: int = Field(default=0)
+    red_cards: int = Field(default=0)
+    injuries_sustained: int = Field(default=0)
+    man_of_match: int = Field(default=0)
+    total_match_rating: float = Field(default=0.0)
+
+
 class YouthProspect(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     save_game_id: int = Field(foreign_key="savegame.id", index=True)

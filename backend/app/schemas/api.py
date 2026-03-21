@@ -563,6 +563,40 @@ class YouthIntakeResponse(BaseModel):
     prospects: list[YouthProspectRead]
 
 
+class PlayerSeasonStatsRead(BaseModel):
+    season_number: int
+    appearances: int
+    starts: int
+    minutes_played: int
+    tries_scored: int
+    conversions: int
+    penalty_goals: int
+    drop_goals: int
+    total_points: int
+    tackles_made: int
+    tackles_missed: int
+    tackle_success: float
+    carries: int
+    line_breaks: int
+    yellow_cards: int
+    red_cards: int
+    injuries_sustained: int
+    man_of_match: int
+    average_rating: float
+
+
+class PlayerDetailResponse(BaseModel):
+    player: SquadPlayerRead
+    team_name: str
+    current_season: PlayerSeasonStatsRead | None
+    career: list[PlayerSeasonStatsRead]
+
+
+class SquadStatsResponse(BaseModel):
+    season_number: int
+    players: list[dict[str, Any]]
+
+
 class OffseasonStatusResponse(BaseModel):
     save: SaveSummary
     next_objective: str

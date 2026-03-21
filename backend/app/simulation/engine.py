@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from backend.app.models.entities import Player, PlayerMedicalAssignment, Team, TeamSelection, TeamTactics, WeeklyPerformancePlan
@@ -57,6 +57,29 @@ class PlayerOutcome:
 
 
 @dataclass
+class PlayerMatchStats:
+    player_id: int
+    started: bool = False
+    minutes_played: int = 0
+    tries_scored: int = 0
+    conversions: int = 0
+    penalty_goals: int = 0
+    drop_goals: int = 0
+    tackles_made: int = 0
+    tackles_missed: int = 0
+    carries: int = 0
+    line_breaks: int = 0
+    yellow_cards: int = 0
+    red_cards: int = 0
+    injuries_sustained: int = 0
+    match_rating: float = 6.0
+
+
+def _ensure_player_stats(state: TeamState, player_id: int) -> PlayerMatchStats:
+    return state.player_stats.setdefault(player_id, PlayerMatchStats(player_id=player_id))
+
+
+@dataclass
 class TeamState:
     profile: TeamProfile
     score: int = 0
@@ -78,6 +101,7 @@ class TeamState:
     cards: int = 0
     commentary: list[dict[str, Any]] = field(default_factory=list)
     outcomes: dict[int, PlayerOutcome] = field(default_factory=dict)
+    player_stats: dict[int, PlayerMatchStats] = field(default_factory=dict)
 
 
 @dataclass
@@ -257,7 +281,13 @@ def build_team_profile(
 
 
 def initialize_team_state(profile: TeamProfile) -> TeamState:
-    return TeamState(profile=profile)
+    state = TeamState(profile=profile)
+    for selected in profile.starters:
+        ps = _ensure_player_stats(state, selected.player.id)
+        ps.started = True
+    for selected in profile.bench:
+        _ensure_player_stats(state, selected.player.id)
+    return state
 
 
 def serialize_team_state(state: TeamState) -> dict[str, Any]:
@@ -265,6 +295,7 @@ def serialize_team_state(state: TeamState) -> dict[str, Any]:
         **{field: getattr(state, field) for field in TEAM_STATE_FIELDS},
         "commentary": state.commentary,
         "outcomes": {str(player_id): outcome.__dict__ for player_id, outcome in state.outcomes.items()},
+        "player_stats": {str(player_id): asdict(ps) for player_id, ps in state.player_stats.items()},
     }
 
 
@@ -278,6 +309,10 @@ def hydrate_team_state(profile: TeamProfile, payload: dict[str, Any] | None) -> 
     state.outcomes = {
         int(player_id): PlayerOutcome(**outcome)
         for player_id, outcome in payload.get("outcomes", {}).items()
+    }
+    state.player_stats = {
+        int(player_id): PlayerMatchStats(**ps)
+        for player_id, ps in payload.get("player_stats", {}).items()
     }
     return state
 
@@ -481,12 +516,17 @@ def simulate_block(
                 offense_state.tries += 1
                 offense_state.score += 5
                 offense_state.line_breaks += 1
-                offense_state.tackles_made += rng.randint(1, 3)
-                defense_state.tackles_missed += rng.randint(1, 2)
+                off_tackles = rng.randint(1, 3)
+                def_missed = rng.randint(1, 2)
+                offense_state.tackles_made += off_tackles
+                defense_state.tackles_missed += def_missed
+                _ensure_player_stats(offense_state, finisher.id).tries_scored += 1
+                _ensure_player_stats(offense_state, finisher.id).line_breaks += 1
                 conversion_success = rng.random() < min(0.95, 0.45 + offense_power["goal"] / 110)
                 if conversion_success:
                     offense_state.conversions += 1
                     offense_state.score += 2
+                    _ensure_player_stats(offense_state, offense_state.profile.goal_kicker.id).conversions += 1
                 block_commentary.append(
                     _commentary(
                         max(1, minute - rng.randint(0, CONFIG.block_minutes - 1)),
@@ -507,6 +547,7 @@ def simulate_block(
                     if success:
                         offense_state.penalties += 1
                         offense_state.score += 3
+                        _ensure_player_stats(offense_state, kicker.id).penalty_goals += 1
                         block_commentary.append(
                             _commentary(
                                 max(1, minute - rng.randint(0, CONFIG.block_minutes - 1)),
@@ -532,10 +573,12 @@ def simulate_block(
                         forward = _pick_involved_player(rng, offense_state.profile.starters, "forward")
                         offense_state.tries += 1
                         offense_state.score += 5
+                        _ensure_player_stats(offense_state, forward.id).tries_scored += 1
                         conversion_success = rng.random() < min(0.92, 0.4 + offense_power["goal"] / 110)
                         if conversion_success:
                             offense_state.conversions += 1
                             offense_state.score += 2
+                            _ensure_player_stats(offense_state, offense_state.profile.goal_kicker.id).conversions += 1
                         block_commentary.append(
                             _commentary(
                                 max(1, minute - rng.randint(0, CONFIG.block_minutes - 1)),
@@ -564,6 +607,7 @@ def simulate_block(
                     if rng.random() < 0.32 + offense_power["goal"] / 180:
                         offense_state.drop_goals += 1
                         offense_state.score += 3
+                        _ensure_player_stats(offense_state, offense_state.profile.goal_kicker.id).drop_goals += 1
                         block_commentary.append(
                             _commentary(
                                 max(1, minute - rng.randint(0, CONFIG.block_minutes - 1)),
@@ -599,6 +643,7 @@ def simulate_block(
             outcome = _ensure_outcome(state, injured)
             outcome.injury_status = "Hamstring strain" if injured.speed > injured.strength else "Shoulder knock"
             outcome.injury_weeks_remaining = weeks
+            _ensure_player_stats(state, injured.id).injuries_sustained += 1
             block_commentary.append(
                 _commentary(
                     max(1, minute - rng.randint(0, 4)),
@@ -617,6 +662,7 @@ def simulate_block(
             if offense_is_red:
                 state.cards += 1
                 outcome.suspended_matches_delta += 1
+                _ensure_player_stats(state, offender.id).red_cards += 1
                 block_commentary.append(
                     _commentary(
                         max(1, minute - rng.randint(0, 4)),
@@ -627,6 +673,7 @@ def simulate_block(
                     )
                 )
             else:
+                _ensure_player_stats(state, offender.id).yellow_cards += 1
                 block_commentary.append(
                     _commentary(
                         max(1, minute - rng.randint(0, 4)),
@@ -647,6 +694,21 @@ def simulate_block(
                 52,
             )
         )
+
+    # Distribute team-level tackles, carries, line breaks to players proportionally
+    for state in (home_state, away_state):
+        starters = [s for s in state.profile.starters]
+        if starters:
+            tackle_weights = [max(1, s.player.tackling) for s in starters]
+            carry_weights = [max(1, s.player.speed + s.player.handling) for s in starters]
+            tackle_total = sum(tackle_weights)
+            carry_total = sum(carry_weights)
+            for i, selected in enumerate(starters):
+                ps = _ensure_player_stats(state, selected.player.id)
+                ps.carries += 1
+                ps.tackles_made += round(tackle_weights[i] / tackle_total * 3)
+        for selected in starters:
+            _ensure_player_stats(state, selected.player.id).minutes_played += CONFIG.block_minutes
 
     block_commentary.sort(key=lambda event: (event["minute"], event["team"]))
     home_state.commentary.extend(block_commentary)
@@ -696,6 +758,10 @@ def build_stats(home_state: TeamState, away_state: TeamState, *, blocks_played: 
             "scrum_success": round(100 * away_state.scrum_wins / max(1, away_state.scrum_attempts)),
             "lineout_success": round(100 * away_state.lineout_wins / max(1, away_state.lineout_attempts)),
             "cards": away_state.cards,
+        },
+        "player_stats": {
+            "home": {str(pid): asdict(ps) for pid, ps in home_state.player_stats.items()},
+            "away": {str(pid): asdict(ps) for pid, ps in away_state.player_stats.items()},
         },
     }
 

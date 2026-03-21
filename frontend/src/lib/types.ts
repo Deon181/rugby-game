@@ -505,3 +505,44 @@ export type OffseasonStatusResponse = {
   retirements: string[];
   promoted_count: number;
 };
+
+export type PlayerSeasonStats = {
+  season_number: number;
+  appearances: number;
+  starts: number;
+  minutes_played: number;
+  tries_scored: number;
+  conversions: number;
+  penalty_goals: number;
+  drop_goals: number;
+  total_points: number;
+  tackles_made: number;
+  tackles_missed: number;
+  tackle_success: number;
+  carries: number;
+  line_breaks: number;
+  yellow_cards: number;
+  red_cards: number;
+  injuries_sustained: number;
+  man_of_match: number;
+  average_rating: number;
+};
+
+export type PlayerDetail = {
+  player: SquadPlayer;
+  team_name: string;
+  current_season: PlayerSeasonStats | null;
+  career: PlayerSeasonStats[];
+};
+
+export type SquadStats = {
+  season_number: number;
+  players: Array<{
+    id: number;
+    name: string;
+    primary_position: string;
+    overall_rating: number;
+    age: number;
+    stats: PlayerSeasonStats | null;
+  }>;
+};

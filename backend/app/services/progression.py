@@ -358,6 +358,10 @@ def record_fixture_result(
         performance_plan=away_plan,
         medical_assignments=away_medical,
     )
+
+    from backend.app.services.stats import record_player_match_stats
+    record_player_match_stats(session, save, home_team.id, away_team.id, simulation)
+
     return result
 
 
