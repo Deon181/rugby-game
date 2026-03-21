@@ -20,6 +20,7 @@ const PerformancePage = lazy(() => import("./pages/PerformancePage").then((modul
 const SquadPage = lazy(() => import("./pages/SquadPage").then((module) => ({ default: module.SquadPage })));
 const TablePage = lazy(() => import("./pages/TablePage").then((module) => ({ default: module.TablePage })));
 const TacticsPage = lazy(() => import("./pages/TacticsPage").then((module) => ({ default: module.TacticsPage })));
+const PlayerDetailPage = lazy(() => import("./pages/PlayerDetailPage").then((module) => ({ default: module.PlayerDetailPage })));
 const TransfersPage = lazy(() => import("./pages/TransfersPage").then((module) => ({ default: module.TransfersPage })));
 
 function AppRoutes() {
@@ -62,6 +63,7 @@ function AppRoutes() {
           <Route path="/new-game/reveal" element={<NewTeamRevealPage />} />
           <Route path="/offseason" element={<OffseasonPage />} />
           <Route path="/squad" element={<SquadPage />} />
+          <Route path="/players/:playerId" element={<PlayerDetailPage />} />
           <Route path="/performance" element={<PerformancePage />} />
           <Route path="/tactics" element={<TacticsPage />} />
           <Route path="/fixtures" element={<FixturesPage />} />

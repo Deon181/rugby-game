@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { LoadingPanel } from "../components/LoadingPanel";
 import { PageHeader } from "../components/PageHeader";
 import { SectionCard } from "../components/SectionCard";
 import { api } from "../lib/api";
 import { formatMoney } from "../lib/format";
-import type { PerformanceOverview, Selection, SquadPlayer, SquadResponse } from "../lib/types";
+import type { PerformanceOverview, Selection, SquadPlayer, SquadResponse, SquadStats } from "../lib/types";
 
 const lineupSlots = [
   "Loosehead Prop",
@@ -40,6 +40,7 @@ export function SquadPage() {
   const [performance, setPerformance] = useState<PerformanceOverview | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [squadStats, setSquadStats] = useState<SquadStats | null>(null);
 
   async function loadData() {
     const [squadResponse, selectionResponse, performanceResponse] = await Promise.all([
@@ -50,6 +51,7 @@ export function SquadPage() {
     setSquad(squadResponse);
     setSelection(selectionResponse);
     setPerformance(performanceResponse);
+    api.squadStats().then(setSquadStats).catch(() => {});
   }
 
   useEffect(() => {
@@ -229,7 +231,7 @@ export function SquadPage() {
                 {squad.players.map((player) => (
                   <tr key={player.id} className="border-t border-border">
                     <td className="py-3">
-                      <div className="font-medium">{player.name}</div>
+                      <Link to={`/players/${player.id}`} className="font-medium text-accent hover:underline">{player.name}</Link>
                       <div className="text-xs text-muted">{player.nationality} · {formatMoney(player.wage)}</div>
                     </td>
                     <td className="py-3">{player.primary_position}</td>
@@ -264,6 +266,84 @@ export function SquadPage() {
             </table>
           </div>
         </SectionCard>
+      </div>
+
+      {/* Season Leaderboards */}
+      {squadStats && squadStats.players.some((p) => p.stats) && (
+        <SectionCard title="Season Leaderboards" subtitle="Top performers across the squad this season.">
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            <LeaderboardColumn
+              title="Top Try Scorers"
+              players={squadStats.players
+                .filter((p) => p.stats && p.stats.tries_scored > 0)
+                .sort((a, b) => (b.stats?.tries_scored ?? 0) - (a.stats?.tries_scored ?? 0))
+                .slice(0, 5)}
+              statKey="tries_scored"
+              statLabel="tries"
+            />
+            <LeaderboardColumn
+              title="Top Tacklers"
+              players={squadStats.players
+                .filter((p) => p.stats && p.stats.tackles_made > 0)
+                .sort((a, b) => (b.stats?.tackles_made ?? 0) - (a.stats?.tackles_made ?? 0))
+                .slice(0, 5)}
+              statKey="tackles_made"
+              statLabel="tackles"
+            />
+            <LeaderboardColumn
+              title="Most Appearances"
+              players={squadStats.players
+                .filter((p) => p.stats && p.stats.appearances > 0)
+                .sort((a, b) => (b.stats?.appearances ?? 0) - (a.stats?.appearances ?? 0))
+                .slice(0, 5)}
+              statKey="appearances"
+              statLabel="apps"
+            />
+            <LeaderboardColumn
+              title="Highest Rated"
+              players={squadStats.players
+                .filter((p) => p.stats && p.stats.appearances >= 3)
+                .sort((a, b) => (b.stats?.average_rating ?? 0) - (a.stats?.average_rating ?? 0))
+                .slice(0, 5)}
+              statKey="average_rating"
+              statLabel="avg"
+              isFloat
+            />
+          </div>
+        </SectionCard>
+      )}
+    </div>
+  );
+}
+
+type LeaderboardColumnProps = {
+  title: string;
+  players: SquadStats["players"];
+  statKey: string;
+  statLabel: string;
+  isFloat?: boolean;
+};
+
+function LeaderboardColumn({ title, players, statKey, statLabel, isFloat }: LeaderboardColumnProps) {
+  if (players.length === 0) return null;
+  return (
+    <div>
+      <h3 className="mb-3 text-sm font-semibold text-muted">{title}</h3>
+      <div className="space-y-2">
+        {players.map((p, i) => {
+          const value = (p.stats as Record<string, number> | null)?.[statKey] ?? 0;
+          return (
+            <div key={p.id} className="flex items-center gap-2 text-sm">
+              <span className="w-5 text-muted">{i + 1}.</span>
+              <Link to={`/players/${p.id}`} className="flex-1 truncate text-accent hover:underline">
+                {p.name}
+              </Link>
+              <span className="text-xs text-muted">{p.primary_position}</span>
+              <span className="font-semibold">{isFloat ? value.toFixed(1) : value}</span>
+              <span className="text-xs text-muted">{statLabel}</span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
